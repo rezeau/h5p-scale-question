@@ -98,6 +98,13 @@ h5p utils pack H5P.ScaleQuestion-0.1 H5P.ScaleQuestion-0.1.0.h5p
 
 This non-recursive command does not bundle dependencies. The `.h5pignore` file excludes tests and other development-only files from the package.
 
+## Acknowledgments
+
+H5P.ScaleQuestion was developed by Joseph Rézeau
+with assistance from ChatGPT and Codex (OpenAI)
+for technical discussions, implementation,
+testing, and code review.
+
 ## License
 
 H5P.ScaleQuestion is released under the [MIT License](LICENSE.txt).
