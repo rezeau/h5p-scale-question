@@ -6,7 +6,7 @@ H5P.ScaleQuestion is an interactive, gradable H5P question type in which learner
 
 ScaleQuestion supports two modes:
 
-- **Numerical scale:** configure a minimum, maximum, selectable step, reference answer, and optional accepted tolerance.
+- **Numerical scale:** configure a minimum, maximum, selectable step, correct answer, and optional accepted tolerance.
 - **Custom points:** configure an ordered list of reference points. The authored list is not sorted. Vertical questions display the first authored point at the top; horizontal questions reverse the visual left-to-right order so lower or earlier points can appear on the left.
 
 Both modes support horizontal and vertical orientations. Custom-point mode requires between 2 and 12 valid reference points, with exactly one point marked as correct.
@@ -17,7 +17,7 @@ Authors can configure:
 
 - Question text and optional image, video, or audio media. Image zooming can be disabled.
 - Numerical or custom-point scale mode and horizontal or vertical orientation.
-- Numerical minimum, maximum, selectable step, reference answer, and accepted tolerance.
+- Numerical minimum, maximum, selectable step, correct answer, and accepted tolerance.
 - Custom-point values, optional labels, ordering, and the correct point.
 - Maximum number of attempts.
 - Manual checking or automatic checking after selection.
@@ -43,8 +43,8 @@ Numerical configurations require:
 - A minimum below the maximum.
 - A positive selectable step.
 - A non-negative accepted tolerance.
-- A reference answer inside the configured domain.
-- With zero tolerance, a reference answer reachable from the minimum using the selectable step.
+- A correct answer inside the configured domain.
+- With zero tolerance, a correct answer reachable from the minimum using the selectable step.
 - With positive tolerance, at least one selectable position inside the inclusive accepted interval.
 
 Custom-point configurations require 2–12 valid reference points and exactly one point marked correct. Point values are required and are treated as text; labels are optional.

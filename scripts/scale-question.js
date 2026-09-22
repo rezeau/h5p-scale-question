@@ -52,14 +52,14 @@ H5P.ScaleQuestion = (function ($, Question) {
       minimumFiniteError: 'Minimum value must be a finite number.',
       maximumFiniteError: 'Maximum value must be a finite number.',
       stepFiniteError: 'Selectable step must be a finite number.',
-      correctValueFiniteError: 'Reference answer must be a finite number.',
+      correctValueFiniteError: 'Correct answer must be a finite number.',
       acceptedToleranceFiniteError: 'Accepted tolerance must be a finite number.',
       minimumMaximumError: 'Minimum must be less than maximum.',
       stepPositiveError: 'Selectable step must be positive.',
       toleranceNonNegativeError: 'Accepted tolerance must be non-negative.',
-      correctValueRangeError: 'Correct value must be within the selectable domain.',
+      correctValueRangeError: 'Correct answer must be within the selectable domain.',
       safeIntegerError: 'Numerical scale values exceed the safe integer domain.',
-      correctValueReachableError: 'Correct value must be reachable from minimum using the selectable step.',
+      correctValueReachableError: 'Correct answer must be reachable from minimum using the selectable step.',
       acceptedIntervalError: 'Accepted interval must contain at least one selectable slider position.'
     }
   };
@@ -103,22 +103,6 @@ H5P.ScaleQuestion = (function ($, Question) {
     merged.l10n = {};
     for (key in DEFAULTS.l10n) {
       merged.l10n[key] = l10n[key] !== undefined ? l10n[key] : DEFAULTS.l10n[key];
-    }
-
-    // Before singular and plural templates existed, one customizable template
-    // used the English token "attempt(s)". Preserve authored legacy wording,
-    // including after the editor injects the new English defaults.
-    if (Object.prototype.hasOwnProperty.call(l10n, 'incorrectFeedback')) {
-      var legacyIncorrectFeedback = typeof l10n.incorrectFeedback === 'string' ?
-        l10n.incorrectFeedback : '';
-      if (!Object.prototype.hasOwnProperty.call(l10n, 'incorrectFeedbackSingular') ||
-          l10n.incorrectFeedbackSingular === DEFAULTS.l10n.incorrectFeedbackSingular) {
-        merged.l10n.incorrectFeedbackSingular = legacyIncorrectFeedback.replace('attempt(s)', 'attempt');
-      }
-      if (!Object.prototype.hasOwnProperty.call(l10n, 'incorrectFeedbackPlural') ||
-          l10n.incorrectFeedbackPlural === DEFAULTS.l10n.incorrectFeedbackPlural) {
-        merged.l10n.incorrectFeedbackPlural = legacyIncorrectFeedback.replace('attempt(s)', 'attempts');
-      }
     }
 
     return merged;

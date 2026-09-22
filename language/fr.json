@@ -142,7 +142,6 @@
           "label": "Feedback pour une réponse correcte",
           "default": "Correct."
         },
-        {},
         {
           "label": "Feedback intermédiaire incorrect avec une tentative restante",
           "default": "Incorrect. Il reste @remaining tentative."
@@ -216,8 +215,8 @@
           "default": "La valeur de l'incrément doit être un nombre."
         },
         {
-          "label": "Erreur de réponse de référence non valide",
-          "default": "La réponse de référence doit être un nombre fini."
+          "label": "Erreur de réponse correcte non valide",
+          "default": "La réponse correcte doit être un nombre fini."
         },
         {
           "label": "Erreur de tolérance acceptée non valide",
@@ -236,8 +235,8 @@
           "default": "La tolérance acceptée doit être positive ou nulle."
         },
         {
-          "label": "Erreur de réponse de référence hors du domaine",
-          "default": "La réponse de référence doit se situer dans le domaine sélectionnable."
+          "label": "Erreur de réponse correcte hors du domaine",
+          "default": "La réponse correcte doit se situer dans le domaine sélectionnable."
         },
         {
           "label": "Erreur de domaine numérique non sûr",
@@ -245,7 +244,7 @@
         },
         {
           "label": "Erreur de réponse exacte inaccessible",
-          "default": "La réponse de référence doit pouvoir être atteinte à partir de la valeur minimale avec la valeur d'incrément."
+          "default": "La réponse correcte doit pouvoir être atteinte à partir de la valeur minimale avec la valeur d'incrément."
         },
         {
           "label": "Erreur d’intervalle accepté vide",

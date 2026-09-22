@@ -15,6 +15,8 @@ const french = JSON.parse(frenchSource);
 const scriptPath = path.join(root, 'scripts', 'scale-question.js');
 const source = fs.readFileSync(scriptPath, 'utf8');
 const cssSource = fs.readFileSync(path.join(root, 'styles', 'scale-question.css'), 'utf8');
+const readmeSource = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+const iconSource = fs.readFileSync(path.join(root, 'icon.svg'), 'utf8');
 
 const cssDeclarationsFor = (selector) => {
   const marker = `${selector} {`;
@@ -359,6 +361,9 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
     assert.equal(field.widget, 'showWhen');
     assert.equal(field.showWhen.rules[0].equals, 'numerical');
   });
+  const correctValue = semantics.find((field) => field.name === 'correctValue');
+  assert.equal(correctValue.name, 'correctValue');
+  assert.equal(correctValue.label, 'Correct answer');
   const tolerance = semantics.find((field) => field.name === 'acceptedTolerance');
   assert.equal(tolerance.label, 'Accepted tolerance (±)');
   assert.equal(tolerance.default, 0);
@@ -366,6 +371,7 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.equal(tolerance.optional, true);
   assert.match(tolerance.description, /inclusive interval/i);
   assert.match(tolerance.description, /zero requires an exact selectable answer/i);
+  assert.match(tolerance.description, /correct answer/i);
   const points = semantics.find((field) => field.name === 'customPoints');
   assert.equal(points.type, 'list');
   assert.equal(points.min, 2);
@@ -398,8 +404,34 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
   const l10n = semantics.find((field) => field.name === 'l10n');
   const correctAnswer = l10n.fields.find((field) => field.name === 'correctAnswer');
   assert.equal(correctAnswer.default, 'Correct answer: @value');
+  assert.deepEqual(
+    l10n.fields
+      .filter((field) => [
+        'correctValueFiniteError',
+        'correctValueRangeError',
+        'correctValueReachableError'
+      ].includes(field.name))
+      .map((field) => [field.name, field.label, field.default]),
+    [
+      ['correctValueFiniteError', 'Invalid correct answer error', 'Correct answer must be a finite number.'],
+      ['correctValueRangeError', 'Correct answer outside domain error', 'Correct answer must be within the selectable domain.'],
+      ['correctValueReachableError', 'Unreachable exact answer error', 'Correct answer must be reachable from minimum using the selectable step.']
+    ]
+  );
+  assert.doesNotMatch(JSON.stringify(semantics), /reference[ -]answer|correct value/i);
+  assert.doesNotMatch(readmeSource, /reference[ -]answer|correct value/i);
+  assert.match(readmeSource, /reference points/i);
   const forbidden = /opinion|survey|self[- ]?assessment|ungraded|likert|preference|historical|ordinal/i;
   assert.equal(forbidden.test(JSON.stringify(semantics)), false);
+});
+
+test('library icon uses the standard H5P canvas with centered vector artwork', () => {
+  const rootTag = iconSource.match(/<svg\b[^>]*>/)[0];
+  assert.match(rootTag, /viewBox="0 0 400 225"/);
+  assert.doesNotMatch(rootTag, /\s(?:width|height)=/);
+  assert.match(iconSource, /<g transform="translate\(100 12\.5\) scale\(0\.78125\)">/);
+  assert.doesNotMatch(iconSource, /<(?:image|script)\b/i);
+  assert.doesNotMatch(iconSource, /\b(?:href|src)=/i);
 });
 
 test('automatic-check authoring field uses the approved semantics and keeps legacy input hidden', () => {
@@ -689,7 +721,7 @@ test('missing and zero tolerance preserve exact-answer validation and scoring', 
     step: 2,
     correctValue: 1,
     acceptedTolerance: 0
-  }))[0], /correct value.*reachable/i);
+  }))[0], /correct answer.*reachable/i);
 
   [missing, validParams({ acceptedTolerance: 0 })].forEach((params) => {
     const { instance, calls } = createInstance(params);
@@ -1993,7 +2025,7 @@ test('accepted approximate answer appends its tolerance explanation to correct f
   );
 });
 
-test('exact reference answer preserves correct feedback when tolerance is positive', () => {
+test('exact correct answer preserves correct feedback when tolerance is positive', () => {
   const { instance, calls } = createInstance(validParams({
     correctValue: 2,
     acceptedTolerance: 1,
@@ -2005,7 +2037,7 @@ test('exact reference answer preserves correct feedback when tolerance is positi
   assert.equal(calls.feedback.at(-1)[0], '  Exactly right!  ');
 });
 
-test('non-selectable reference makes every accepted selectable answer approximate', () => {
+test('non-selectable correct answer makes every accepted selectable answer approximate', () => {
   [2, 3].forEach((selectedIndex) => {
     const { instance, calls } = createInstance(validParams({
       minimum: 0,
@@ -3008,15 +3040,19 @@ test('getTitle uses metadata and falls back to the display title', () => {
   assert.equal(createInstance().instance.getTitle(), 'Scale Question');
 });
 
-test('runtime localization semantics expose new templates and retain reserved and legacy fields', () => {
+test('runtime localization semantics expose the current feedback templates', () => {
   const l10n = semantics.find((field) => field.name === 'l10n');
   const byName = Object.fromEntries(l10n.fields.map((field) => [field.name, field]));
 
-  assert.equal(byName.incorrectFeedback.widget, 'none');
-  assert.equal(byName.incorrectFeedback.optional, true);
-  assert.equal(byName.incorrectFeedback.default, undefined);
+  assert.equal(byName.incorrectFeedback, undefined);
   assert.equal(byName.incorrectFeedbackSingular.default, 'Incorrect. @remaining attempt remaining.');
   assert.equal(byName.incorrectFeedbackPlural.default, 'Incorrect. @remaining attempts remaining.');
+  assert.equal(byName.terminalIncorrectFeedback.default, 'Incorrect. 0 attempts remaining.');
+  const singularIndex = l10n.fields.findIndex((field) => field.name === 'incorrectFeedbackSingular');
+  assert.deepEqual(
+    l10n.fields.slice(singularIndex, singularIndex + 3).map((field) => field.name),
+    ['incorrectFeedbackSingular', 'incorrectFeedbackPlural', 'terminalIncorrectFeedback']
+  );
   assert.equal(
     byName.acceptedToleranceFeedback.default,
     'Your answer is within the accepted tolerance of ±@tolerance.'
@@ -3037,6 +3073,13 @@ test('runtime localization semantics expose new templates and retain reserved an
     'correctValueRangeError', 'safeIntegerError', 'correctValueReachableError',
     'acceptedIntervalError'
   ].forEach((name) => assert.equal(typeof byName[name].default, 'string', name));
+});
+
+test('common localization semantics contain no hidden none widget', () => {
+  const l10n = semantics.find((field) => field.name === 'l10n');
+  assert.equal(l10n.common, true);
+  assert.equal(l10n.fields.some((field) => field.widget === 'none'), false);
+  assert.equal(l10n.fields.some((field) => field.name === 'incorrectFeedback'), false);
 });
 
 test('every configuration validation path uses its localized message', () => {
@@ -3157,40 +3200,6 @@ test('singular and plural attempt feedback use complete localized templates', ()
   terminal.instance.selectPosition(1);
   terminal.instance.checkAnswer();
   assert.equal(terminal.calls.feedback.at(-1)[0], 'Aucune tentative restante.');
-});
-
-test('legacy customized attempt feedback survives direct and editor-defaulted content', () => {
-  const legacyParams = validParams({
-    l10n: { incorrectFeedback: 'Legacy: @remaining attempt(s) left.' }
-  });
-  const direct = createInstance(legacyParams);
-  attach(direct.instance);
-  direct.instance.selectPosition(1);
-  direct.instance.checkAnswer();
-  assert.equal(direct.calls.feedback.at(-1)[0], 'Legacy: 1 attempt left.');
-
-  const initialized = applyEditorDefaults(semantics, plain(legacyParams));
-  assert.equal(initialized.l10n.incorrectFeedbackSingular, 'Incorrect. @remaining attempt remaining.');
-  assert.equal(initialized.l10n.incorrectFeedbackPlural, 'Incorrect. @remaining attempts remaining.');
-  const editorDefaulted = createInstance(initialized);
-  attach(editorDefaulted.instance);
-  editorDefaulted.instance.selectPosition(1);
-  editorDefaulted.instance.checkAnswer();
-  assert.equal(editorDefaulted.calls.feedback.at(-1)[0], 'Legacy: 1 attempt left.');
-});
-
-test('an explicitly customized new attempt template overrides legacy feedback', () => {
-  const { instance, calls } = createInstance(validParams({
-    l10n: {
-      incorrectFeedback: 'Legacy @remaining attempt(s).',
-      incorrectFeedbackSingular: 'New singular @remaining.',
-      incorrectFeedbackPlural: 'New plural @remaining.'
-    }
-  }));
-  attach(instance);
-  instance.selectPosition(1);
-  instance.checkAnswer();
-  assert.equal(calls.feedback.at(-1)[0], 'New singular 1.');
 });
 
 test('localized fallback title is used only when metadata has no title', () => {
@@ -3379,19 +3388,18 @@ test('French covers every active l10n default and every configuration error', ()
     minimumFiniteError: 'Minimum value must be a finite number.',
     maximumFiniteError: 'Maximum value must be a finite number.',
     stepFiniteError: 'Selectable step must be a finite number.',
-    correctValueFiniteError: 'Reference answer must be a finite number.',
+    correctValueFiniteError: 'Correct answer must be a finite number.',
     acceptedToleranceFiniteError: 'Accepted tolerance must be a finite number.',
     minimumMaximumError: 'Minimum must be less than maximum.',
     stepPositiveError: 'Selectable step must be positive.',
     toleranceNonNegativeError: 'Accepted tolerance must be non-negative.',
-    correctValueRangeError: 'Correct value must be within the selectable domain.',
+    correctValueRangeError: 'Correct answer must be within the selectable domain.',
     safeIntegerError: 'Numerical scale values exceed the safe integer domain.',
-    correctValueReachableError: 'Correct value must be reachable from minimum using the selectable step.',
+    correctValueReachableError: 'Correct answer must be reachable from minimum using the selectable step.',
     acceptedIntervalError: 'Accepted interval must contain at least one selectable slider position.'
   });
 
   englishL10n.fields.forEach((field) => {
-    if (field.name === 'incorrectFeedback') return;
     assert.equal(typeof translatedDefaults[field.name], 'string', field.name);
     assert.notEqual(translatedDefaults[field.name].trim(), '', field.name);
   });
@@ -3444,6 +3452,19 @@ test('French uses the approved increment, correct-answer, custom-point, and feed
     translatedTopLevel('acceptedTolerance').description,
     'L’intervalle accepté s’étend de manière égale au-dessus et au-dessous de la réponse correcte. Toute position sélectionnable du curseur située dans cet intervalle inclusif est correcte. Une tolérance nulle exige une réponse sélectionnable exacte. Une tolérance positive permet à la réponse correcte de se situer entre deux positions sélectionnables.'
   );
+  assert.deepEqual(translatedL10n('correctValueFiniteError'), {
+    label: 'Erreur de réponse correcte non valide',
+    default: 'La réponse correcte doit être un nombre fini.'
+  });
+  assert.deepEqual(translatedL10n('correctValueRangeError'), {
+    label: 'Erreur de réponse correcte hors du domaine',
+    default: 'La réponse correcte doit se situer dans le domaine sélectionnable.'
+  });
+  assert.equal(
+    translatedL10n('correctValueReachableError').default,
+    "La réponse correcte doit pouvoir être atteinte à partir de la valeur minimale avec la valeur d'incrément."
+  );
+  assert.doesNotMatch(frenchSource, /réponse de référence/i);
 
   const scaleMode = translatedTopLevel('scaleMode');
   const customPoints = translatedTopLevel('customPoints');
@@ -3496,7 +3517,7 @@ test('French uses the approved increment, correct-answer, custom-point, and feed
   });
 });
 
-test('French keeps legacy localization hidden and autoCheck behavior unchanged', () => {
+test('French keeps autoCheck compatibility hidden and common localization switchable', () => {
   const behaviourIndex = semantics.findIndex((field) => field.name === 'behaviour');
   const englishBehaviour = semantics[behaviourIndex];
   const frenchBehaviour = french.semantics[behaviourIndex];
@@ -3515,10 +3536,9 @@ test('French keeps legacy localization hidden and autoCheck behavior unchanged',
 
   const englishL10n = semantics.find((field) => field.name === 'l10n');
   const frenchL10n = french.semantics[semantics.indexOf(englishL10n)];
-  const legacyFeedbackIndex = englishL10n.fields.findIndex((field) => field.name === 'incorrectFeedback');
-  assert.deepEqual(frenchL10n.fields[legacyFeedbackIndex], {});
-  assert.equal(englishL10n.fields[legacyFeedbackIndex].widget, 'none');
-  assert.equal(englishL10n.fields[legacyFeedbackIndex].label, undefined);
+  assert.equal(englishL10n.fields.some((field) => field.name === 'incorrectFeedback'), false);
+  assert.equal(englishL10n.fields.some((field) => field.widget === 'none'), false);
+  assert.equal(frenchL10n.fields.length, englishL10n.fields.length);
 });
 
 test('French l10n defaults are consumed without changing attempts, scoring, or xAPI completion', () => {

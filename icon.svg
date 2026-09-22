@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225" role="img" aria-labelledby="title">
   <title id="title">Scale Question</title>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
@@ -19,15 +19,17 @@
     </linearGradient>
   </defs>
 
-  <rect x="14" y="14" width="228" height="228" rx="38" fill="url(#background)" stroke="url(#blue)" stroke-width="9"/>
+  <g transform="translate(100 12.5) scale(0.78125)">
+    <rect x="14" y="14" width="228" height="228" rx="38" fill="url(#background)" stroke="url(#blue)" stroke-width="9"/>
 
-  <path d="M91 79c0-24 17-39 42-39 26 0 44 15 44 38 0 19-11 29-28 39-13 8-19 16-19 29" fill="none" stroke="url(#pink)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="130" cy="165" r="10" fill="url(#pink)"/>
+    <path d="M91 79c0-24 17-39 42-39 26 0 44 15 44 38 0 19-11 29-28 39-13 8-19 16-19 29" fill="none" stroke="url(#pink)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="130" cy="165" r="10" fill="url(#pink)"/>
 
-  <ellipse cx="43" cy="184" rx="8" ry="11" fill="none" stroke="#30486b" stroke-width="5"/>
-  <path d="M193 178l6-4v20M193 194h12" fill="none" stroke="#30486b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <ellipse cx="215" cy="184" rx="8" ry="11" fill="none" stroke="#30486b" stroke-width="5"/>
+    <ellipse cx="43" cy="184" rx="8" ry="11" fill="none" stroke="#30486b" stroke-width="5"/>
+    <path d="M193 178l6-4v20M193 194h12" fill="none" stroke="#30486b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="215" cy="184" rx="8" ry="11" fill="none" stroke="#30486b" stroke-width="5"/>
 
-  <line x1="45" y1="211" x2="211" y2="211" stroke="url(#track)" stroke-width="10" stroke-linecap="round"/>
-  <circle cx="157" cy="211" r="16" fill="url(#blue)" stroke="#fff" stroke-width="5"/>
+    <line x1="45" y1="211" x2="211" y2="211" stroke="url(#track)" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="157" cy="211" r="16" fill="url(#blue)" stroke="#fff" stroke-width="5"/>
+  </g>
 </svg>

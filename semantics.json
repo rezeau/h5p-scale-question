@@ -101,7 +101,7 @@
   {
     "name": "correctValue",
     "type": "number",
-    "label": "Reference answer",
+    "label": "Correct answer",
     "importance": "high",
     "default": 5,
     "widget": "showWhen",
@@ -113,7 +113,7 @@
     "name": "acceptedTolerance",
     "type": "number",
     "label": "Accepted tolerance (±)",
-    "description": "The accepted interval extends equally above and below the reference answer. Every selectable slider position inside the inclusive interval is correct. Zero requires an exact selectable answer. A positive tolerance allows the reference answer itself to fall between selectable positions.",
+    "description": "The accepted interval extends equally above and below the correct answer. Every selectable slider position inside the inclusive interval is correct. Zero requires an exact selectable answer. A positive tolerance allows the correct answer itself to fall between selectable positions.",
     "importance": "high",
     "min": 0,
     "default": 0,
@@ -262,7 +262,6 @@
       {"name": "showSolution", "type": "text", "label": "Show Solution button label", "default": "Show solution"},
       {"name": "correctAnswer", "type": "text", "label": "Revealed correct answer", "default": "Correct answer: @value"},
       {"name": "correctFeedback", "type": "text", "label": "Correct feedback", "default": "Correct."},
-      {"name": "incorrectFeedback", "type": "text", "optional": true, "widget": "none"},
       {"name": "incorrectFeedbackSingular", "type": "text", "label": "Intermediate incorrect feedback with one attempt remaining", "default": "Incorrect. @remaining attempt remaining."},
       {"name": "incorrectFeedbackPlural", "type": "text", "label": "Intermediate incorrect feedback with multiple attempts remaining", "default": "Incorrect. @remaining attempts remaining."},
       {"name": "terminalIncorrectFeedback", "type": "text", "label": "Terminal incorrect feedback", "default": "Incorrect. 0 attempts remaining."},
@@ -281,14 +280,14 @@
       {"name": "minimumFiniteError", "type": "text", "label": "Invalid minimum value error", "default": "Minimum value must be a finite number."},
       {"name": "maximumFiniteError", "type": "text", "label": "Invalid maximum value error", "default": "Maximum value must be a finite number."},
       {"name": "stepFiniteError", "type": "text", "label": "Invalid selectable step error", "default": "Selectable step must be a finite number."},
-      {"name": "correctValueFiniteError", "type": "text", "label": "Invalid reference answer error", "default": "Reference answer must be a finite number."},
+      {"name": "correctValueFiniteError", "type": "text", "label": "Invalid correct answer error", "default": "Correct answer must be a finite number."},
       {"name": "acceptedToleranceFiniteError", "type": "text", "label": "Invalid accepted tolerance error", "default": "Accepted tolerance must be a finite number."},
       {"name": "minimumMaximumError", "type": "text", "label": "Invalid minimum and maximum error", "default": "Minimum must be less than maximum."},
       {"name": "stepPositiveError", "type": "text", "label": "Non-positive selectable step error", "default": "Selectable step must be positive."},
       {"name": "toleranceNonNegativeError", "type": "text", "label": "Negative accepted tolerance error", "default": "Accepted tolerance must be non-negative."},
-      {"name": "correctValueRangeError", "type": "text", "label": "Reference answer outside domain error", "default": "Correct value must be within the selectable domain."},
+      {"name": "correctValueRangeError", "type": "text", "label": "Correct answer outside domain error", "default": "Correct answer must be within the selectable domain."},
       {"name": "safeIntegerError", "type": "text", "label": "Unsafe numerical scale error", "default": "Numerical scale values exceed the safe integer domain."},
-      {"name": "correctValueReachableError", "type": "text", "label": "Unreachable exact answer error", "default": "Correct value must be reachable from minimum using the selectable step."},
+      {"name": "correctValueReachableError", "type": "text", "label": "Unreachable exact answer error", "default": "Correct answer must be reachable from minimum using the selectable step."},
       {"name": "acceptedIntervalError", "type": "text", "label": "Empty accepted interval error", "default": "Accepted interval must contain at least one selectable slider position."}
     ]
   }
