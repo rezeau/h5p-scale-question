@@ -1,0 +1,257 @@
+{
+  "semantics": [
+    {
+      "label": "Média",
+      "fields": [
+        {
+          "label": "Type",
+          "description": "Média facultatif à afficher au-dessus de la question."
+        },
+        {
+          "label": "Désactiver le zoom sur l’image"
+        }
+      ]
+    },
+    {
+      "label": "Question",
+      "description": "Question à notation objective affichée au-dessus de l’échelle numérique."
+    },
+    {
+      "label": "Mode de l’échelle",
+      "options": [
+        {
+          "label": "Échelle numérique"
+        },
+        {
+          "label": "Points de référence personnalisés"
+        }
+      ]
+    },
+    {
+      "label": "Valeur minimale"
+    },
+    {
+      "label": "Valeur maximale"
+    },
+    {
+      "label": "Valeur d'incrément"
+    },
+    {
+      "label": "Réponse correcte"
+    },
+    {
+      "label": "Tolérance acceptée (±)",
+      "description": "L’intervalle accepté s’étend de manière égale au-dessus et au-dessous de la réponse correcte. Toute position sélectionnable du curseur située dans cet intervalle inclusif est correcte. Une tolérance nulle exige une réponse sélectionnable exacte. Une tolérance positive permet à la réponse correcte de se situer entre deux positions sélectionnables."
+    },
+    {
+      "label": "Points de référence personnalisés",
+      "description": "Sur un mode d'échelle avec des points de référence personnalisés, cette liste ne sera pas ordonnée automatiquement. Pour les échelles numériques ou chronologiques, saisissez les points du plus élevé ou du plus récent en haut au plus faible ou au plus ancien en bas. Les questions verticales affichent cet ordre de haut en bas. Les questions horizontales l’affichent en sens inverse de gauche à droite, en plaçant les points plus faibles ou plus anciens à gauche et les points plus élevés ou plus récents à droite. L’orientation verticale est généralement préférable lorsque l’échelle contient plus d’environ six points ou des libellés relativement longs. Cochez un seul point comme étant la réponse correcte attendue. Le réordonnancement d’un point déplace également son réglage de réponse correcte.",
+      "entity": "point de référence",
+      "field": {
+        "label": "Point de référence",
+        "fields": [
+          {
+            "label": "Valeur",
+            "description": "Valeur d’affichage obligatoire. Elle est traitée comme du texte et n’est ni triée ni interprétée comme un nombre."
+          },
+          {
+            "label": "Libellé",
+            "description": "Contexte supplémentaire facultatif affiché avec la valeur."
+          },
+          {
+            "label": "Point correct",
+            "description": "Un seul point de référence personnalisé doit être marqué comme correct."
+          }
+        ]
+      }
+    },
+    {
+      "label": "Feedback pour une réponse située en dessous de la position correcte",
+      "description": "Retour facultatif pour une réponse trop faible ou trop précoce. Par exemple : « Trop tôt ! Essayez une date ultérieure. » ou « Trop faible ! Essayez une valeur plus élevée. »"
+    },
+    {
+      "label": "Feedback pour une réponse située au-dessus de la position correcte",
+      "description": "Retour facultatif pour une réponse trop élevée ou trop tardive. Par exemple : « Trop tard ! Essayez une date antérieure. » ou « Trop élevé ! Essayez une valeur plus faible. »"
+    },
+    {
+      "label": "Nombre maximal de tentatives"
+    },
+    {
+      "label": "Orientation du curseur",
+      "options": [
+        {
+          "label": "Horizontale"
+        },
+        {
+          "label": "Verticale"
+        }
+      ]
+    },
+    {
+      "label": "Paramètres comportementaux",
+      "fields": [
+        {
+          "label": "Vérifier automatiquement les réponses après la sélection",
+          "description": "Lorsque cette option est activée, la réponse de l’apprenant est vérifiée immédiatement après la sélection d’une valeur ou d’un point. Le bouton Vérifier n’est pas affiché. Lorsqu’elle est désactivée, l’apprenant doit cliquer sur Vérifier pour envoyer une réponse."
+        },
+        {},
+        {
+          "label": "Activer le bouton Réessayer"
+        },
+        {
+          "label": "Activer le bouton Afficher la solution"
+        }
+      ]
+    },
+    {
+      "label": "Textes de l’interface",
+      "fields": [
+        {
+          "label": "Libellé accessible de l’échelle",
+          "default": "Échelle numérique"
+        },
+        {
+          "label": "Libellé accessible de l’échelle à points de référence personnalisés",
+          "default": "Échelle à points de référence personnalisés"
+        },
+        {
+          "label": "Annonce de la valeur du curseur",
+          "default": "Curseur sur @value. Sélectionnez cette valeur pour répondre."
+        },
+        {
+          "label": "Annonce de la valeur sélectionnée",
+          "default": "Valeur sélectionnée : @value"
+        },
+        {
+          "label": "Libellé du bouton Vérifier",
+          "default": "Vérifier"
+        },
+        {
+          "label": "Libellé du bouton Réessayer",
+          "default": "Réessayer"
+        },
+        {
+          "label": "Libellé du bouton Afficher la solution",
+          "default": "Afficher la solution"
+        },
+        {
+          "label": "Bonne réponse affichée",
+          "default": "Bonne réponse : @value"
+        },
+        {
+          "label": "Feedback pour une réponse correcte",
+          "default": "Correct."
+        },
+        {},
+        {
+          "label": "Feedback intermédiaire incorrect avec une tentative restante",
+          "default": "Incorrect. Il reste @remaining tentative."
+        },
+        {
+          "label": "Feedback intermédiaire incorrect avec plusieurs tentatives restantes",
+          "default": "Incorrect. Il reste @remaining tentatives."
+        },
+        {
+          "label": "Feedback incorrect final",
+          "default": "Incorrect. Il ne reste aucune tentative."
+        },
+        {
+          "label": "Texte de solution pour l’intervalle accepté",
+          "default": "Intervalle accepté : de @lower à @upper. Le curseur affiche la position acceptée @value."
+        },
+        {
+          "label": "Feedback pour une réponse dans la tolérance acceptée",
+          "default": "Votre réponse se situe dans la tolérance acceptée de ±@tolerance."
+        },
+        {
+          "label": "Texte accessible du score",
+          "default": "Votre score est de :num sur :total"
+        },
+        {
+          "label": "Titre par défaut du contenu",
+          "default": "Question sur une échelle"
+        },
+        {
+          "label": "Préfixe de l’erreur de configuration",
+          "default": "Erreur de configuration de la question sur une échelle :"
+        },
+        {
+          "label": "Erreur de nombre maximal de tentatives non valide",
+          "default": "Le nombre maximal de tentatives doit être un entier positif."
+        },
+        {
+          "label": "Erreur de nombre de points de référence personnalisés non valide",
+          "default": "La liste des points de référence personnalisés doit contenir entre 2 et 12 points."
+        },
+        {
+          "label": "Erreur de valeur manquante pour un point de référence personnalisé",
+          "default": "Le point de référence personnalisé @index doit avoir une valeur."
+        },
+        {
+          "label": "Erreur de valeur trop longue pour un point de référence personnalisé",
+          "default": "La valeur du point de référence personnalisé @index ne doit pas dépasser 40 caractères."
+        },
+        {
+          "label": "Erreur de type de libellé non valide pour un point de référence personnalisé",
+          "default": "Le libellé du point de référence personnalisé @index doit être du texte."
+        },
+        {
+          "label": "Erreur de libellé trop long pour un point de référence personnalisé",
+          "default": "Le libellé du point de référence personnalisé @index ne doit pas dépasser 80 caractères."
+        },
+        {
+          "label": "Erreur de nombre de points de référence corrects non valide",
+          "default": "Un seul point de référence personnalisé doit être marqué comme correct."
+        },
+        {
+          "label": "Erreur de valeur minimale non valide",
+          "default": "La valeur minimale doit être un nombre fini."
+        },
+        {
+          "label": "Erreur de valeur maximale non valide",
+          "default": "La valeur maximale doit être un nombre fini."
+        },
+        {
+          "label": "Erreur ! Valeur d'incrément invalide.",
+          "default": "La valeur de l'incrément doit être un nombre."
+        },
+        {
+          "label": "Erreur de réponse de référence non valide",
+          "default": "La réponse de référence doit être un nombre fini."
+        },
+        {
+          "label": "Erreur de tolérance acceptée non valide",
+          "default": "La tolérance acceptée doit être un nombre fini."
+        },
+        {
+          "label": "Erreur de valeurs minimale et maximale non valides",
+          "default": "La valeur minimale doit être inférieure à la valeur maximale."
+        },
+        {
+          "label": "Erreur ! La valeur d'incrément entrée n'est pas un nombre positif.",
+          "default": "La valeur d'incrément doit être un nombre positif."
+        },
+        {
+          "label": "Erreur de tolérance acceptée négative",
+          "default": "La tolérance acceptée doit être positive ou nulle."
+        },
+        {
+          "label": "Erreur de réponse de référence hors du domaine",
+          "default": "La réponse de référence doit se situer dans le domaine sélectionnable."
+        },
+        {
+          "label": "Erreur de domaine numérique non sûr",
+          "default": "Les valeurs de l’échelle numérique dépassent le domaine des entiers représentables de manière sûre."
+        },
+        {
+          "label": "Erreur de réponse exacte inaccessible",
+          "default": "La réponse de référence doit pouvoir être atteinte à partir de la valeur minimale avec la valeur d'incrément."
+        },
+        {
+          "label": "Erreur d’intervalle accepté vide",
+          "default": "L’intervalle accepté doit contenir au moins une position sélectionnable du curseur."
+        }
+      ]
+    }
+  ]
+}

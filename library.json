@@ -1,0 +1,41 @@
+{
+  "title": "Scale Question",
+  "description": "An objectively gradable scale question type.",
+  "machineName": "H5P.ScaleQuestion",
+  "majorVersion": 0,
+  "minorVersion": 1,
+  "patchVersion": 0,
+  "runnable": 1,
+  "license": "MIT",
+  "embedTypes": [
+    "iframe"
+  ],
+  "coreApi": {
+    "majorVersion": 1,
+    "minorVersion": 28
+  },
+  "preloadedCss": [
+    {
+      "path": "styles/scale-question.css"
+    }
+  ],
+  "preloadedJs": [
+    {
+      "path": "scripts/scale-question.js"
+    }
+  ],
+  "preloadedDependencies": [
+    {
+      "machineName": "H5P.Question",
+      "majorVersion": 1,
+      "minorVersion": 5
+    }
+  ],
+  "editorDependencies": [
+    {
+      "machineName": "H5PEditor.ShowWhen",
+      "majorVersion": 1,
+      "minorVersion": 0
+    }
+  ]
+}

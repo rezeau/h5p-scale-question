@@ -1,0 +1,11 @@
+tests
+node_modules
+package.json
+package-lock.json
+README.md
+.gitignore
+.h5pignore
+coverage
+.nyc_output
+*.h5p
+scale-question-icon-reference.png
