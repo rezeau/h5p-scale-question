@@ -59,6 +59,14 @@
             "description": "Contexte supplémentaire facultatif affiché avec la valeur."
           },
           {
+            "label": "Image miniature",
+            "description": "Image miniature facultative pour ce point. Les images miniatures ne sont affichées qu’en mode vertical avec des points de référence personnalisés."
+          },
+          {
+            "label": "Texte alternatif de l’image miniature",
+            "description": "Décrivez l’image miniature pour les technologies d’assistance. Laissez ce champ vide lorsque l’image est décorative ou répète la valeur et le libellé visibles. Les images miniatures ne sont affichées qu’en mode vertical avec des points de référence personnalisés."
+          },
+          {
             "label": "Point correct",
             "description": "Un seul point de référence personnalisé doit être marqué comme correct."
           }
@@ -78,6 +86,7 @@
     },
     {
       "label": "Orientation du curseur",
+      "description": "Les images miniatures sont disponibles uniquement avec des points de référence personnalisés et une orientation verticale.",
       "options": [
         {
           "label": "Horizontale"

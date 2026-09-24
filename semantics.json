@@ -161,6 +161,23 @@
           "maxLength": 80
         },
         {
+          "name": "image",
+          "type": "image",
+          "label": "Thumbnail image",
+          "description": "Optional thumbnail for this point. Thumbnail images are displayed only in vertical Custom point mode.",
+          "importance": "medium",
+          "optional": true
+        },
+        {
+          "name": "imageAlt",
+          "type": "text",
+          "label": "Thumbnail alternative text",
+          "description": "Describe the thumbnail for assistive technologies. Leave empty when the image is decorative or repeats the visible value and label. Thumbnail images are displayed only in vertical Custom point mode.",
+          "importance": "medium",
+          "optional": true,
+          "maxLength": 255
+        },
+        {
           "name": "correct",
           "type": "boolean",
           "label": "Correct point",
@@ -200,6 +217,7 @@
     "name": "orientation",
     "type": "select",
     "label": "Slider orientation",
+    "description": "Thumbnail images are available only when using Custom points with Vertical orientation.",
     "importance": "medium",
     "options": [
       {

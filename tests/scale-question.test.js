@@ -8,6 +8,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'library.json'), 'utf8'));
+const packageManifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const semantics = JSON.parse(fs.readFileSync(path.join(root, 'semantics.json'), 'utf8'));
 const frenchPath = path.join(root, 'language', 'fr.json');
 const frenchSource = fs.readFileSync(frenchPath, 'utf8');
@@ -17,6 +18,8 @@ const source = fs.readFileSync(scriptPath, 'utf8');
 const cssSource = fs.readFileSync(path.join(root, 'styles', 'scale-question.css'), 'utf8');
 const readmeSource = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const iconSource = fs.readFileSync(path.join(root, 'icon.svg'), 'utf8');
+const upgradesPath = path.join(root, 'upgrades.js');
+const upgradesSource = fs.readFileSync(upgradesPath, 'utf8');
 
 const cssDeclarationsFor = (selector) => {
   const marker = `${selector} {`;
@@ -218,6 +221,7 @@ function createRuntime() {
     feedbackRemoved: 0,
     buttons: {},
     media: [],
+    paths: [],
     registrationOrder: []
   };
 
@@ -281,6 +285,9 @@ function createRuntime() {
   }
 
   function jquery(tag, attributes) {
+    if (attributes && Object.prototype.hasOwnProperty.call(attributes, 'draggable')) {
+      throw new Error('jQuery constructor attempted to invoke the draggable plugin');
+    }
     return new FakeElement(tag, attributes);
   }
 
@@ -288,6 +295,10 @@ function createRuntime() {
     H5P: {
       jQuery: jquery,
       Question,
+      getPath: (mediaPath, contentId) => {
+        calls.paths.push({ mediaPath, contentId });
+        return `/content/${contentId}/${mediaPath}`;
+      },
       createTitle: (title) => title
     }
   };
@@ -328,7 +339,8 @@ function applyEditorDefaults(fields, params) {
 test('library identity and asset paths are consistent', () => {
   assert.equal(manifest.title, 'Scale Question');
   assert.equal(manifest.machineName, 'H5P.ScaleQuestion');
-  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 1, 0]);
+  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 2, 0]);
+  assert.equal(packageManifest.version, '0.2.0');
   assert.equal(manifest.runnable, 1);
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedJs[0].path)));
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedCss[0].path)));
@@ -338,6 +350,41 @@ test('library identity and asset paths are consistent', () => {
   assert.deepEqual(manifest.editorDependencies, [{
     machineName: 'H5PEditor.ShowWhen', majorVersion: 1, minorVersion: 0
   }]);
+});
+
+test('0.1 content upgrade to 0.2 preserves existing parameters unchanged', () => {
+  const context = {};
+  vm.createContext(context);
+  new vm.Script(upgradesSource, { filename: upgradesPath }).runInContext(context);
+  const upgrades = context.H5PUpgrades['H5P.ScaleQuestion'];
+  const sourceVersion = { major: 0, minor: 1 };
+  const targetVersion = { major: 0, minor: 2 };
+  const parameters = validCustomParams();
+  const appliedVersions = [];
+  let result = parameters;
+
+  Object.keys(upgrades).map(Number).sort((a, b) => a - b).forEach((major) => {
+    if (major < sourceVersion.major || major > targetVersion.major) {
+      return;
+    }
+    Object.keys(upgrades[major]).map(Number).sort((a, b) => a - b).forEach((minor) => {
+      if (minor <= sourceVersion.minor || minor > targetVersion.minor) {
+        return;
+      }
+      const upgrade = upgrades[major][minor];
+      const contentUpgrade = upgrade.contentUpgrade || upgrade;
+      assert.equal(typeof contentUpgrade, 'function');
+      appliedVersions.push([major, minor]);
+      contentUpgrade(result, (error, upgraded) => {
+        assert.equal(error, null);
+        result = upgraded;
+      });
+    });
+  });
+
+  assert.deepEqual(appliedVersions, [[0, 2]]);
+  assert.equal(result, parameters);
+  assert.deepEqual(plain(result), validCustomParams());
 });
 
 test('editor schema exposes numerical and ordered custom-point modes', () => {
@@ -382,9 +429,28 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.match(points.description, /vertical.*top to bottom/i);
   assert.match(points.description, /horizontal.*reverse.*left to right/i);
   assert.match(points.description, /vertical orientation.*more than approximately six points.*long point labels/i);
-  assert.deepEqual(points.field.fields.map((field) => field.name), ['value', 'label', 'correct']);
+  assert.deepEqual(
+    points.field.fields.map((field) => field.name),
+    ['value', 'label', 'image', 'imageAlt', 'correct']
+  );
   assert.equal(points.field.fields[0].maxLength, 40);
   assert.equal(points.field.fields[1].maxLength, 80);
+  const pointImage = points.field.fields[2];
+  const pointImageAlt = points.field.fields[3];
+  [pointImage, pointImageAlt].forEach((field) => {
+    assert.equal(field.optional, true);
+    assert.equal(field.widget, undefined);
+    assert.equal(field.showWhen, undefined);
+    assert.match(
+      field.description,
+      /Thumbnail images are displayed only in vertical Custom point mode\./
+    );
+  });
+  assert.equal(pointImage.type, 'image');
+  assert.equal(pointImageAlt.type, 'text');
+  assert.equal(pointImageAlt.maxLength, 255);
+  assert.match(pointImageAlt.description, /leave empty.*decorative/i);
+  assert.doesNotMatch(pointImageAlt.description, /file ?name/i);
   const belowFeedback = semantics.find((field) => field.name === 'feedbackBelowCorrect');
   const aboveFeedback = semantics.find((field) => field.name === 'feedbackAboveCorrect');
   assert.equal(belowFeedback.type, 'text');
@@ -397,6 +463,12 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.equal(orientation.type, 'select');
   assert.equal(orientation.label, 'Slider orientation');
   assert.equal(orientation.default, 'horizontal');
+  assert.equal(orientation.widget, undefined);
+  assert.equal(orientation.showWhen, undefined);
+  assert.equal(
+    orientation.description,
+    'Thumbnail images are available only when using Custom points with Vertical orientation.'
+  );
   assert.deepEqual(orientation.options, [
     { value: 'horizontal', label: 'Horizontal' },
     { value: 'vertical', label: 'Vertical' }
@@ -627,6 +699,348 @@ test('custom model preserves author order and assigns equally spaced indices', (
   assert.equal(instance.$slider.attributes.step, 1);
 });
 
+test('custom model retains valid native image data and preserves alternative text', () => {
+  const points = customPoints();
+  points[0].image = {
+    path: ' images/freezing.png ',
+    mime: 'image/png',
+    width: 640,
+    height: 480,
+    copyright: { license: 'CC BY' }
+  };
+  points[0].imageAlt = ' Snow-covered landscape ';
+  points[1].image = { mime: 'image/png' };
+  points[1].imageAlt = 123;
+  points[2].image = ['images/not-an-image-object.png'];
+  points[3].image = { path: '   ' };
+  points[3].imageAlt = '';
+
+  const { instance } = createInstance(validCustomParams({ customPoints: points }));
+  assert.deepEqual(plain(instance.model.points[0].image), {
+    path: 'images/freezing.png',
+    mime: 'image/png',
+    width: 640,
+    height: 480,
+    copyright: { license: 'CC BY' }
+  });
+  assert.equal(instance.model.points[0].imageAlt, ' Snow-covered landscape ');
+  assert.equal(instance.model.points[1].image, null);
+  assert.equal(instance.model.points[1].imageAlt, '');
+  assert.equal(instance.model.points[2].image, null);
+  assert.equal(instance.model.points[3].image, null);
+  assert.equal(instance.model.points[3].imageAlt, '');
+});
+
+test('thumbnail data is excluded from custom saved-state compatibility signatures', () => {
+  const imageLess = createInstance(validCustomParams());
+  const points = customPoints();
+  points[0].image = { path: 'images/freezing.png', mime: 'image/png' };
+  points[0].imageAlt = 'Freezing conditions';
+  points[1].image = { path: 'images/cold.png', width: 48, height: 48 };
+  points[1].imageAlt = '';
+  const withImages = createInstance(validCustomParams({ customPoints: points }));
+
+  assert.equal(withImages.instance.model.signature, imageLess.instance.model.signature);
+  assert.equal(
+    imageLess.instance.model.signature,
+    JSON.stringify(customPoints().map(({ value, label, correct }) => ({ value, label, correct })))
+  );
+
+  attach(imageLess.instance);
+  imageLess.instance.selectPosition(1);
+  imageLess.instance.checkAnswer();
+  const state = plain(imageLess.instance.getCurrentState());
+  const restored = createInstance(validCustomParams({ customPoints: points }), { previousState: state });
+  attach(restored.instance);
+  assert.equal(restored.instance.cursorIndex, 1);
+  assert.equal(restored.instance.selectedIndex, 1);
+  assert.equal(restored.instance.attemptsUsed, 1);
+  assert.equal(restored.instance.awaitingRetry, true);
+  assert.deepEqual(plain(restored.instance.getCurrentState()), state);
+  assert.equal(xAPIEvents(restored.calls).length, 0);
+});
+
+test('thumbnail data does not alter scoring or xAPI identity', () => {
+  ['horizontal', 'vertical'].forEach((orientation) => {
+    const points = customPoints();
+    points[2].image = { path: 'images/warm.png', mime: 'image/png' };
+    points[2].imageAlt = 'Sunshine';
+    const { instance, calls } = createInstance(validCustomParams({ orientation, customPoints: points }));
+    attach(instance);
+
+    instance.selectPosition(2);
+    instance.checkAnswer();
+    assert.equal(instance.getScore(), 1);
+    assert.equal(instance.getCurrentState().image, undefined);
+    assert.equal(instance.getCurrentState().imageAlt, undefined);
+
+    const statement = plain(xAPIEvents(calls)[0].data.statement);
+    assert.equal(statement.result.response, 'point-2');
+    assert.deepEqual(statement.object.definition.correctResponsesPattern, ['point-2']);
+    assert.equal(statement.object.definition.choices[2].description.en, 'Warm — Comfortable');
+    assert.doesNotMatch(JSON.stringify(statement), /Sunshine|warm\.png/);
+  });
+});
+
+test('vertical custom points render valid images at their authored indices with exact alt text', () => {
+  const points = customPoints();
+  points[0].image = { path: 'images/freezing.png', mime: 'image/png' };
+  points[0].imageAlt = ' Snow and ice ';
+  points[2].image = { path: 'images/warm.png', mime: 'image/png' };
+  points[2].imageAlt = '';
+  const { instance, calls } = createInstance(validCustomParams({
+    orientation: 'vertical',
+    customPoints: points
+  }));
+  attach(instance);
+
+  assert.ok(instance.$pointList.classes.has('h5p-scale-question-points-has-thumbnails'));
+  assert.deepEqual(calls.paths, [
+    { mediaPath: 'images/freezing.png', contentId: 42 },
+    { mediaPath: 'images/warm.png', contentId: 42 }
+  ]);
+
+  const firstImage = instance.$pointItems[0].children[0];
+  assert.equal(firstImage.tag, '<img>');
+  assert.ok(firstImage.classes.has('h5p-scale-question-point-thumbnail'));
+  assert.equal(firstImage.attributes.src, '/content/42/images/freezing.png');
+  assert.equal(firstImage.attributes.alt, ' Snow and ice ');
+  assert.equal(firstImage.attributes.draggable, undefined);
+  assert.equal(firstImage.properties.draggable, false);
+  assert.equal(instance.$pointItems[0].children[1].textValue, 'Freezing');
+  assert.equal(instance.$pointItems[0].children[2].textValue, 'Very cold');
+
+  assert.equal(instance.$pointItems[1].children.some((child) => child.tag === '<img>'), false);
+  assert.equal(instance.$pointItems[1].children[0].textValue, 'Cold');
+
+  const decorativeImage = instance.$pointItems[2].children[0];
+  assert.equal(decorativeImage.tag, '<img>');
+  assert.equal(decorativeImage.attributes.src, '/content/42/images/warm.png');
+  assert.equal(decorativeImage.attributes.alt, '');
+  assert.doesNotMatch(decorativeImage.attributes.alt, /warm\.png/);
+  assert.equal(instance.$pointItems[2].attributes['data-index'], 2);
+});
+
+test('thumbnail drag prevention uses the native property without invoking jQuery UI draggable', () => {
+  const points = customPoints();
+  points[0].image = { path: 'images/freezing.png' };
+  const { instance } = createInstance(validCustomParams({
+    orientation: 'vertical',
+    customPoints: points
+  }));
+
+  attach(instance);
+  const thumbnail = instance.$pointItems[0].children[0];
+  assert.equal(thumbnail.tag, '<img>');
+  assert.equal(thumbnail.attributes.draggable, undefined);
+  assert.equal(thumbnail.properties.draggable, false);
+});
+
+test('horizontal custom points ignore thumbnail data and preserve their existing DOM order', () => {
+  const points = customPoints();
+  points[0].image = { path: 'images/freezing.png' };
+  points[0].imageAlt = 'Snow and ice';
+  points[2].image = { path: 'images/warm.png' };
+  points[2].imageAlt = '';
+  const { instance, calls } = createInstance(validCustomParams({ customPoints: points }));
+  attach(instance);
+
+  assert.equal(instance.$pointList.classes.has('h5p-scale-question-points-has-thumbnails'), false);
+  assert.deepEqual(calls.paths, []);
+  assert.equal(
+    instance.$pointItems.some((item) => item.children.some((child) => child.tag === '<img>')),
+    false
+  );
+  assert.deepEqual(instance.$pointList.children.map((item) => item.children[0].textValue), [
+    'Hot', 'Warm', 'Cold', 'Freezing'
+  ]);
+});
+
+test('vertical thumbnail CSS uses 48px images, an 80px selected size and gutter, 72px rows, and the existing narrow limit', () => {
+  const imageRule = cssDeclarationsFor('.h5p-scale-question-point-thumbnail');
+  const selectedImageRule = cssDeclarationsFor(
+    '.h5p-scale-question-points-vertical:not(.h5p-scale-question-points-solution-visible) .h5p-scale-question-point-selected .h5p-scale-question-point-thumbnail,\n' +
+    '.h5p-scale-question-points-vertical.h5p-scale-question-points-solution-visible .h5p-scale-question-point-solution .h5p-scale-question-point-thumbnail'
+  );
+  assert.equal(imageRule.position, 'absolute');
+  assert.equal(imageRule['inset-block-start'], '50%');
+  assert.equal(imageRule.transform, 'translateY(-50%)');
+  assert.equal(imageRule['object-fit'], 'contain');
+  assert.equal(imageRule['pointer-events'], 'none');
+  assert.equal(imageRule.width, 'var(--h5p-scale-question-thumbnail-size)');
+  assert.equal(imageRule.height, 'var(--h5p-scale-question-thumbnail-size)');
+  assert.equal(selectedImageRule.width, 'var(--h5p-scale-question-selected-thumbnail-size)');
+  assert.equal(selectedImageRule.height, 'var(--h5p-scale-question-selected-thumbnail-size)');
+
+  assert.match(
+    cssSource,
+    /h5p-scale-question-points-vertical\.h5p-scale-question-points-has-thumbnails\s*\{[^}]*--h5p-scale-question-thumbnail-size:\s*min\(3rem,\s*48px\)[^}]*--h5p-scale-question-selected-thumbnail-size:\s*min\(5rem,\s*80px\)[^}]*--h5p-scale-question-thumbnail-gutter-size:\s*min\(5rem,\s*80px\)/
+  );
+  assert.match(
+    cssSource,
+    /h5p-scale-question-points-has-thumbnails\s+\.h5p-scale-question-point\s*\{[^}]*padding-inline-start:\s*calc\(0\.35rem \+ var\(--h5p-scale-question-thumbnail-gutter-size\) \+ 0\.5rem\)/
+  );
+  assert.match(
+    cssSource,
+    /@media \(max-width:\s*30rem\)[\s\S]*?--h5p-scale-question-thumbnail-size:\s*min\(2rem,\s*32px\)[^}]*--h5p-scale-question-selected-thumbnail-size:\s*min\(2rem,\s*32px\)[^}]*--h5p-scale-question-thumbnail-gutter-size:\s*min\(2rem,\s*32px\)/
+  );
+  assert.match(
+    cssSource,
+    /grid-template-rows:\s*repeat\(var\(--h5p-scale-point-count\),\s*minmax\(4\.5rem,\s*1fr\)\)/
+  );
+  assert.doesNotMatch(cssSource, /h5p-scale-question-point\s*\{[^}]*\bheight\s*:/);
+  assert.doesNotMatch(cssSource, /(?:transition|animation)\s*:/);
+});
+
+test('vertical thumbnail selection and deselection reuse the existing selected-point class', () => {
+  const points = customPoints();
+  points[0].image = { path: 'images/freezing.png' };
+  points[1].image = { path: 'images/cold.png' };
+  const { instance } = createInstance(validCustomParams({
+    orientation: 'vertical',
+    customPoints: points
+  }));
+  attach(instance);
+
+  instance.selectPosition(0);
+  assert.ok(instance.$pointItems[0].classes.has('h5p-scale-question-point-selected'));
+  assert.equal(instance.$pointItems[1].classes.has('h5p-scale-question-point-selected'), false);
+
+  instance.$slider.val(1).triggerEvent('input');
+  assert.equal(instance.$pointItems[0].classes.has('h5p-scale-question-point-selected'), false);
+  assert.equal(instance.$pointItems[1].classes.has('h5p-scale-question-point-selected'), false);
+
+  instance.selectPosition(1);
+  assert.equal(instance.$pointItems[0].classes.has('h5p-scale-question-point-selected'), false);
+  assert.ok(instance.$pointItems[1].classes.has('h5p-scale-question-point-selected'));
+});
+
+test('vertical thumbnail enlargement follows the learner answer until Show Solution, then the correct point', () => {
+  const points = customPoints().map((point, index) => Object.assign({}, point, {
+    image: { path: `images/point-${index}.png` }
+  }));
+  const incorrect = createInstance(validCustomParams({
+    orientation: 'vertical',
+    maxAttempts: 1,
+    customPoints: points
+  }));
+  attach(incorrect.instance);
+
+  assert.equal(
+    incorrect.instance.$pointList.classes.has('h5p-scale-question-points-solution-visible'),
+    false
+  );
+  assert.equal(
+    incorrect.instance.$pointItems.some(($point) =>
+      $point.classes.has('h5p-scale-question-point-selected')),
+    false
+  );
+
+  incorrect.instance.selectPosition(0);
+  assert.ok(incorrect.instance.$pointItems[0].classes.has('h5p-scale-question-point-selected'));
+  incorrect.instance.checkAnswer();
+  assert.ok(incorrect.instance.$pointItems[0].classes.has('h5p-scale-question-point-selected'));
+  assert.ok(incorrect.instance.$pointItems[0].classes.has('h5p-scale-question-feedback-incorrect'));
+  assert.equal(
+    incorrect.instance.$pointList.classes.has('h5p-scale-question-points-solution-visible'),
+    false
+  );
+
+  incorrect.instance.showSolutions();
+  assert.ok(
+    incorrect.instance.$pointList.classes.has('h5p-scale-question-points-solution-visible')
+  );
+  assert.ok(incorrect.instance.$pointItems[0].classes.has('h5p-scale-question-point-selected'));
+  assert.equal(
+    incorrect.instance.$pointItems[0].classes.has('h5p-scale-question-point-solution'),
+    false
+  );
+  assert.ok(incorrect.instance.$pointItems[2].classes.has('h5p-scale-question-point-solution'));
+
+  incorrect.instance.resetTask();
+  assert.equal(
+    incorrect.instance.$pointList.classes.has('h5p-scale-question-points-solution-visible'),
+    false
+  );
+  assert.equal(
+    incorrect.instance.$pointItems.some(($point) =>
+      $point.classes.has('h5p-scale-question-point-selected') ||
+      $point.classes.has('h5p-scale-question-point-solution')),
+    false
+  );
+
+  const correct = createInstance(validCustomParams({
+    orientation: 'vertical',
+    customPoints: points
+  }));
+  attach(correct.instance);
+  correct.instance.selectPosition(2);
+  correct.instance.checkAnswer();
+  correct.instance.showSolutions();
+  assert.ok(correct.instance.$pointList.classes.has('h5p-scale-question-points-solution-visible'));
+  assert.ok(correct.instance.$pointItems[2].classes.has('h5p-scale-question-point-selected'));
+  assert.ok(correct.instance.$pointItems[2].classes.has('h5p-scale-question-point-solution'));
+
+  const retry = createInstance(validCustomParams({
+    orientation: 'vertical',
+    maxAttempts: 2,
+    customPoints: points
+  }));
+  attach(retry.instance);
+  retry.instance.selectPosition(0);
+  retry.instance.checkAnswer();
+  retry.instance.retryTask();
+  assert.equal(
+    retry.instance.$pointList.classes.has('h5p-scale-question-points-solution-visible'),
+    false
+  );
+  assert.equal(
+    retry.instance.$pointItems.some(($point) =>
+      $point.classes.has('h5p-scale-question-point-selected') ||
+      $point.classes.has('h5p-scale-question-point-solution')),
+    false
+  );
+});
+
+test('vertical custom slider span aligns equal point-row centers for 2, 3, 5, 8, and 12 points', () => {
+  [2, 3, 5, 8, 12].forEach((count) => {
+    const points = Array.from({ length: count }, (_, index) => ({
+      value: `Point ${index + 1}`,
+      label: index === 1 ? 'A wrapped label remains part of the flexible point row' : '',
+      image: index % 2 === 0 ? { path: `images/point-${index}.png` } : undefined,
+      imageAlt: index % 2 === 0 ? `Point ${index + 1}` : '',
+      correct: index === count - 1
+    }));
+    const { instance } = createInstance(validCustomParams({
+      orientation: 'vertical',
+      customPoints: points
+    }));
+    attach(instance);
+
+    const expectedSpan = 100 * (count - 1) / count;
+    assert.equal(
+      instance.$slider.attributes.style,
+      `--h5p-scale-question-custom-slider-span: ${expectedSpan}%`
+    );
+    instance.trigger('resize');
+    assert.equal(
+      instance.$slider.attributes.style,
+      `--h5p-scale-question-custom-slider-span: ${expectedSpan}%`
+    );
+  });
+
+  const frameRule = cssDeclarationsFor('.h5p-scale-question-custom-frame-vertical');
+  const sliderRule = cssDeclarationsFor(
+    '.h5p-scale-question-custom-frame-vertical > .h5p-scale-question-slider'
+  );
+  assert.equal(frameRule['min-height'], '12rem');
+  assert.equal(sliderRule.height, 'var(--h5p-scale-question-custom-slider-span)');
+  assert.equal(sliderRule['min-height'], '0');
+  assert.equal(sliderRule['padding-block'], '0');
+  assert.equal(sliderRule['align-self'], 'center');
+  assert.doesNotMatch(cssSource, /padding-(?:top|bottom):\s*1\.75rem/);
+});
+
 test('horizontal custom points show reverse authored order from last-left to first-right', () => {
   const { instance } = createInstance(validCustomParams());
   attach(instance);
@@ -655,9 +1069,9 @@ test('vertical custom points show first at top and last at bottom', () => {
   assert.deepEqual(plain(instance.$pointItems.map((item) => item.attributes['data-index'])), [0, 1, 2, 3]);
   assert.equal(instance.$slider.attributes['aria-orientation'], 'vertical');
   assert.equal(instance.$slider.attributes.orient, 'vertical');
-  assert.match(cssSource, /h5p-scale-question-custom-frame-vertical[\s\S]*?height:\s*100%/);
+  assert.match(instance.$slider.attributes.style, /custom-slider-span:\s*75%/);
   assert.match(cssSource, /h5p-scale-question-custom-frame-vertical\s*>\s*\.h5p-scale-question-slider\s*\{[\s\S]*?direction:\s*ltr/);
-  assert.match(cssSource, /grid-template-rows:\s*repeat\(var\(--h5p-scale-point-count\),\s*minmax\(3\.5rem,\s*1fr\)\)/);
+  assert.match(cssSource, /grid-template-rows:\s*repeat\(var\(--h5p-scale-point-count\),\s*minmax\(4\.5rem,\s*1fr\)\)/);
   assert.doesNotMatch(cssSource, /h5p-scale-question-custom-frame-vertical[\s\S]*?\d+(?:\.\d+)?vh/);
 });
 
@@ -3468,10 +3882,23 @@ test('French uses the approved increment, correct-answer, custom-point, and feed
 
   const scaleMode = translatedTopLevel('scaleMode');
   const customPoints = translatedTopLevel('customPoints');
+  const orientation = translatedTopLevel('orientation');
   assert.equal(scaleMode.options[1].label, 'Points de référence personnalisés');
   assert.equal(customPoints.label, 'Points de référence personnalisés');
   assert.equal(customPoints.entity, 'point de référence');
   assert.equal(customPoints.field.label, 'Point de référence');
+  assert.equal(
+    orientation.description,
+    'Les images miniatures sont disponibles uniquement avec des points de référence personnalisés et une orientation verticale.'
+  );
+  const englishCustomPoints = semantics.find((field) => field.name === 'customPoints');
+  ['image', 'imageAlt'].forEach((name) => {
+    const index = englishCustomPoints.field.fields.findIndex((field) => field.name === name);
+    assert.match(
+      customPoints.field.fields[index].description,
+      /Les images miniatures ne sont affichées qu’en mode vertical avec des points de référence personnalisés\./
+    );
+  });
   assert.match(
     customPoints.description,
     /Sur un mode d'échelle avec des points de référence personnalisés, cette liste ne sera pas ordonnée automatiquement\./

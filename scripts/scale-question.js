@@ -147,11 +147,28 @@ H5P.ScaleQuestion = (function ($, Question) {
     };
   };
 
+  var normalizePointImage = function (image) {
+    if (!image || typeof image !== 'object' || Array.isArray(image) ||
+        typeof image.path !== 'string' || image.path.trim() === '') {
+      return null;
+    }
+
+    var normalized = {};
+    Object.keys(image).forEach(function (key) {
+      normalized[key] = image[key];
+    });
+    normalized.path = image.path.trim();
+    return normalized;
+  };
+
   var normalizeCustomPoint = function (point) {
+    point = point || {};
     return {
       value: typeof point.value === 'string' ? point.value.trim() : '',
       label: typeof point.label === 'string' ? point.label.trim() : '',
-      correct: point.correct === true
+      correct: point.correct === true,
+      image: normalizePointImage(point.image),
+      imageAlt: typeof point.imageAlt === 'string' ? point.imageAlt : ''
     };
   };
 
@@ -163,7 +180,13 @@ H5P.ScaleQuestion = (function ($, Question) {
       points: points,
       positionCount: points.length,
       correctIndex: correctIndex,
-      signature: JSON.stringify(points)
+      signature: JSON.stringify(points.map(function (point) {
+        return {
+          value: point.value,
+          label: point.label,
+          correct: point.correct
+        };
+      }))
     };
   };
 
@@ -466,11 +489,16 @@ H5P.ScaleQuestion = (function ($, Question) {
   ScaleQuestion.prototype.createPointList = function (reverseOrder) {
     var self = this;
     var indices = this.model.points.map(function (point, index) { return index; });
+    var renderThumbnails = this.params.orientation === 'vertical';
+    var hasThumbnails = renderThumbnails && this.model.points.some(function (point) {
+      return point.image !== null;
+    });
     if (reverseOrder) {
       indices.reverse();
     }
     this.$pointList = $('<div>', {
-      'class': 'h5p-scale-question-points h5p-scale-question-points-' + this.params.orientation,
+      'class': 'h5p-scale-question-points h5p-scale-question-points-' + this.params.orientation +
+        (hasThumbnails ? ' h5p-scale-question-points-has-thumbnails' : ''),
       'id': this.pointListId,
       'role': 'list',
       'style': '--h5p-scale-point-count: ' + this.model.positionCount
@@ -482,6 +510,14 @@ H5P.ScaleQuestion = (function ($, Question) {
         'role': 'listitem',
         'data-index': index
       }).appendTo(self.$pointList);
+      if (hasThumbnails && point.image) {
+        var $thumbnail = $('<img>', {
+          'class': 'h5p-scale-question-point-thumbnail',
+          'src': H5P.getPath(point.image.path, self.contentId),
+          'alt': point.imageAlt
+        });
+        $thumbnail.prop('draggable', false).appendTo($item);
+      }
       $('<span>', {
         'class': 'h5p-scale-question-point-value',
         'text': point.value
@@ -530,6 +566,11 @@ H5P.ScaleQuestion = (function ($, Question) {
       }).appendTo(this.$scale);
       this.createPointList(false).appendTo($frame);
       this.createSlider($frame, true);
+      this.$slider.attr(
+        'style',
+        '--h5p-scale-question-custom-slider-span: ' +
+          (100 * (this.model.positionCount - 1) / this.model.positionCount) + '%'
+      );
       return;
     }
 
@@ -881,6 +922,13 @@ H5P.ScaleQuestion = (function ($, Question) {
         .toggleClass('h5p-scale-question-feedback-correct', !this.solutionVisible && selectionCorrect)
         .toggleClass('h5p-scale-question-feedback-incorrect', !this.solutionVisible && selectionIncorrect)
         .toggleClass('h5p-scale-question-value-bubble-solution', this.solutionVisible);
+    }
+
+    if (this.$pointList) {
+      this.$pointList.toggleClass(
+        'h5p-scale-question-points-solution-visible',
+        this.solutionVisible
+      );
     }
 
     this.$pointItems.forEach(function ($point, index) {
