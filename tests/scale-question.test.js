@@ -339,8 +339,8 @@ function applyEditorDefaults(fields, params) {
 test('library identity and asset paths are consistent', () => {
   assert.equal(manifest.title, 'Scale Question');
   assert.equal(manifest.machineName, 'H5P.ScaleQuestion');
-  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 2, 0]);
-  assert.equal(packageManifest.version, '0.2.0');
+  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 2, 1]);
+  assert.equal(packageManifest.version, '0.2.1');
   assert.equal(manifest.runnable, 1);
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedJs[0].path)));
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedCss[0].path)));
@@ -389,14 +389,23 @@ test('0.1 content upgrade to 0.2 preserves existing parameters unchanged', () =>
 
 test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.deepEqual(semantics.map((field) => field.name), [
-    'media', 'question', 'scaleMode', 'minimum', 'maximum', 'step', 'correctValue', 'acceptedTolerance',
+    'info', 'media', 'question', 'scaleMode', 'minimum', 'maximum', 'step', 'correctValue', 'acceptedTolerance',
     'customPoints', 'feedbackBelowCorrect', 'feedbackAboveCorrect',
     'maxAttempts', 'orientation', 'behaviour', 'l10n'
   ]);
+  assert.deepEqual(semantics[0], {
+    name: 'info',
+    type: 'boolean',
+    label: 'Tutorial and Examples: <a href="http://www.h5p.rezeau.org" target="_blank" rel="noopener">Papi Jo\'s H5P WordPress site</a>',
+    description: '<span style="color: white;margin-top: -20px;display: table-caption;font-size: large;">&#9608;</span>',
+    optional: true
+  });
   const media = semantics.find((field) => field.name === 'media');
   const mediaType = media.fields.find((field) => field.name === 'type');
   assert.equal(mediaType.optional, true);
+  assert.equal(mediaType.description, undefined);
   assert.deepEqual(mediaType.options, ['H5P.Image 1.1', 'H5P.Video 1.6', 'H5P.Audio 1.5']);
+  assert.equal(semantics.find((field) => field.name === 'question').description, undefined);
   const scaleMode = semantics.find((field) => field.name === 'scaleMode');
   assert.equal(scaleMode.default, 'numerical');
   assert.deepEqual(scaleMode.options, [
@@ -416,59 +425,58 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.equal(tolerance.default, 0);
   assert.equal(tolerance.min, 0);
   assert.equal(tolerance.optional, true);
-  assert.match(tolerance.description, /inclusive interval/i);
-  assert.match(tolerance.description, /zero requires an exact selectable answer/i);
-  assert.match(tolerance.description, /correct answer/i);
+  assert.equal(
+    tolerance.description,
+    'Answers within ± this value are accepted. Use 0 for an exact answer.'
+  );
   const points = semantics.find((field) => field.name === 'customPoints');
   assert.equal(points.type, 'list');
   assert.equal(points.min, 2);
   assert.equal(points.max, 12);
   assert.equal(points.widget, 'showWhen');
-  assert.match(points.description, /you control the point order/i);
-  assert.match(points.description, /highest\/latest at the top.*lowest\/earliest at the bottom/i);
-  assert.match(points.description, /vertical.*top to bottom/i);
-  assert.match(points.description, /horizontal.*reverse.*left to right/i);
-  assert.match(points.description, /vertical orientation.*more than approximately six points.*long point labels/i);
+  assert.equal(
+    points.description,
+    'Enter points from highest/latest at the top to lowest/earliest at the bottom. The list is not sorted automatically.'
+  );
   assert.deepEqual(
     points.field.fields.map((field) => field.name),
     ['value', 'label', 'image', 'imageAlt', 'correct']
   );
   assert.equal(points.field.fields[0].maxLength, 40);
   assert.equal(points.field.fields[1].maxLength, 80);
+  assert.equal(points.field.fields[0].description, undefined);
+  assert.equal(points.field.fields[1].label, 'Optional label');
+  assert.equal(points.field.fields[1].description, undefined);
   const pointImage = points.field.fields[2];
   const pointImageAlt = points.field.fields[3];
   [pointImage, pointImageAlt].forEach((field) => {
     assert.equal(field.optional, true);
     assert.equal(field.widget, undefined);
     assert.equal(field.showWhen, undefined);
-    assert.match(
-      field.description,
-      /Thumbnail images are displayed only in vertical Custom point mode\./
-    );
   });
   assert.equal(pointImage.type, 'image');
+  assert.equal(pointImage.description, 'Displayed only in vertical Custom points mode.');
   assert.equal(pointImageAlt.type, 'text');
   assert.equal(pointImageAlt.maxLength, 255);
-  assert.match(pointImageAlt.description, /leave empty.*decorative/i);
-  assert.doesNotMatch(pointImageAlt.description, /file ?name/i);
+  assert.equal(pointImageAlt.description, undefined);
+  const correctPoint = points.field.fields[4];
+  assert.equal(correctPoint.label, 'Unique correct point');
+  assert.equal(correctPoint.description, undefined);
   const belowFeedback = semantics.find((field) => field.name === 'feedbackBelowCorrect');
   const aboveFeedback = semantics.find((field) => field.name === 'feedbackAboveCorrect');
   assert.equal(belowFeedback.type, 'text');
   assert.equal(belowFeedback.optional, true);
-  assert.match(belowFeedback.description, /too low or too early/i);
+  assert.equal(belowFeedback.description, undefined);
   assert.equal(aboveFeedback.type, 'text');
   assert.equal(aboveFeedback.optional, true);
-  assert.match(aboveFeedback.description, /too high or too late/i);
+  assert.equal(aboveFeedback.description, undefined);
   const orientation = semantics.find((field) => field.name === 'orientation');
   assert.equal(orientation.type, 'select');
   assert.equal(orientation.label, 'Slider orientation');
   assert.equal(orientation.default, 'horizontal');
   assert.equal(orientation.widget, undefined);
   assert.equal(orientation.showWhen, undefined);
-  assert.equal(
-    orientation.description,
-    'Thumbnail images are available only when using Custom points with Vertical orientation.'
-  );
+  assert.equal(orientation.description, undefined);
   assert.deepEqual(orientation.options, [
     { value: 'horizontal', label: 'Horizontal' },
     { value: 'vertical', label: 'Vertical' }
@@ -497,6 +505,15 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.equal(forbidden.test(JSON.stringify(semantics)), false);
 });
 
+test('optional editor information field has no learner-runtime effect', () => {
+  const withoutInfo = createInstance(validParams());
+  const withInfo = createInstance(validParams({ info: true }));
+
+  assert.equal(withInfo.instance.params.info, undefined);
+  assert.deepEqual(plain(withInfo.instance.params), plain(withoutInfo.instance.params));
+  assert.deepEqual(plain(withInfo.instance.model), plain(withoutInfo.instance.model));
+});
+
 test('library icon uses the standard H5P canvas with centered vector artwork', () => {
   const rootTag = iconSource.match(/<svg\b[^>]*>/)[0];
   assert.match(rootTag, /viewBox="0 0 400 225"/);
@@ -514,7 +531,7 @@ test('automatic-check authoring field uses the approved semantics and keeps lega
     name: 'autoCheck',
     type: 'boolean',
     label: 'Automatically check answers after selection',
-    description: "When enabled, the learner's answer is checked immediately after selecting a value or point. The Check button is not displayed. When disabled, the learner must click Check to submit an answer.",
+    description: 'Checks the answer immediately; hides the Check button.',
     default: false
   });
   assert.equal(legacy.widget, 'none');
@@ -3673,6 +3690,10 @@ test('French language file is valid and mirrors the complete translatable semant
   assert.doesNotThrow(() => JSON.parse(frenchSource));
   assert.deepEqual(Object.keys(french), ['semantics']);
   assert.equal(french.semantics.length, semantics.length);
+  assert.deepEqual(french.semantics[0], {
+    label: 'Tutoriel et exemples : <a href="http://www.h5p.rezeau.org" target="_blank" rel="noopener">Site WordPress-H5P de Papi Jo</a>',
+    description: '<span style="color: white;margin-top: -20px;display: table-caption;font-size: large;">&#9608;</span>'
+  });
 
   const verifyNode = (englishNode, frenchNode, location) => {
     assert.equal(typeof frenchNode, 'object', location);
@@ -3864,7 +3885,7 @@ test('French uses the approved increment, correct-answer, custom-point, and feed
   assert.equal(translatedTopLevel('correctValue').label, 'Réponse correcte');
   assert.equal(
     translatedTopLevel('acceptedTolerance').description,
-    'L’intervalle accepté s’étend de manière égale au-dessus et au-dessous de la réponse correcte. Toute position sélectionnable du curseur située dans cet intervalle inclusif est correcte. Une tolérance nulle exige une réponse sélectionnable exacte. Une tolérance positive permet à la réponse correcte de se situer entre deux positions sélectionnables.'
+    'Les réponses situées dans cet intervalle sont acceptées. Utilisez 0 pour une réponse exacte.'
   );
   assert.deepEqual(translatedL10n('correctValueFiniteError'), {
     label: 'Erreur de réponse correcte non valide',
@@ -3879,33 +3900,33 @@ test('French uses the approved increment, correct-answer, custom-point, and feed
     "La réponse correcte doit pouvoir être atteinte à partir de la valeur minimale avec la valeur d'incrément."
   );
   assert.doesNotMatch(frenchSource, /réponse de référence/i);
+  assert.equal(translatedTopLevel('media').fields[0].description, undefined);
+  assert.equal(translatedTopLevel('question').description, undefined);
 
   const scaleMode = translatedTopLevel('scaleMode');
   const customPoints = translatedTopLevel('customPoints');
-  const orientation = translatedTopLevel('orientation');
   assert.equal(scaleMode.options[1].label, 'Points de référence personnalisés');
   assert.equal(customPoints.label, 'Points de référence personnalisés');
   assert.equal(customPoints.entity, 'point de référence');
   assert.equal(customPoints.field.label, 'Point de référence');
-  assert.equal(
-    orientation.description,
-    'Les images miniatures sont disponibles uniquement avec des points de référence personnalisés et une orientation verticale.'
-  );
+  assert.equal(translatedTopLevel('orientation').description, undefined);
   const englishCustomPoints = semantics.find((field) => field.name === 'customPoints');
-  ['image', 'imageAlt'].forEach((name) => {
-    const index = englishCustomPoints.field.fields.findIndex((field) => field.name === name);
-    assert.match(
-      customPoints.field.fields[index].description,
-      /Les images miniatures ne sont affichées qu’en mode vertical avec des points de référence personnalisés\./
-    );
-  });
-  assert.match(
-    customPoints.description,
-    /Sur un mode d'échelle avec des points de référence personnalisés, cette liste ne sera pas ordonnée automatiquement\./
+  const translatedPoint = (name) => customPoints.field.fields[
+    englishCustomPoints.field.fields.findIndex((field) => field.name === name)
+  ];
+  assert.equal(
+    translatedPoint('image').description,
+    'Affichée uniquement en mode vertical avec des points de référence personnalisés.'
   );
-  assert.match(
+  assert.equal(translatedPoint('value').description, undefined);
+  assert.equal(translatedPoint('label').label, 'Libellé facultatif');
+  assert.equal(translatedPoint('label').description, undefined);
+  assert.equal(translatedPoint('imageAlt').description, undefined);
+  assert.equal(translatedPoint('correct').label, 'Point correct unique');
+  assert.equal(translatedPoint('correct').description, undefined);
+  assert.equal(
     customPoints.description,
-    /Cochez un seul point comme étant la réponse correcte attendue\./
+    'Saisissez les points du plus élevé/récent en haut au plus faible/ancien en bas. La liste n’est pas triée automatiquement.'
   );
   assert.equal(
     translatedL10n('customScaleLabel').label,
@@ -3935,6 +3956,7 @@ test('French uses the approved increment, correct-answer, custom-point, and feed
 
   ['feedbackBelowCorrect', 'feedbackAboveCorrect'].forEach((name) => {
     assert.match(translatedTopLevel(name).label, /^Feedback\b/);
+    assert.equal(translatedTopLevel(name).description, undefined);
   });
   [
     'correctFeedback', 'incorrectFeedbackSingular', 'incorrectFeedbackPlural',
@@ -3954,6 +3976,10 @@ test('French keeps autoCheck compatibility hidden and common localization switch
   assert.equal(
     frenchBehaviour.fields[autoCheckIndex].label,
     'Vérifier automatiquement les réponses après la sélection'
+  );
+  assert.equal(
+    frenchBehaviour.fields[autoCheckIndex].description,
+    'Vérifie immédiatement la réponse et masque le bouton Vérifier.'
   );
   assert.equal(frenchBehaviour.fields[autoCheckIndex].default, undefined);
   assert.equal(englishBehaviour.fields[autoCheckIndex].default, false);

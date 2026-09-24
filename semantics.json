@@ -1,5 +1,12 @@
 [
   {
+    "name": "info",
+    "type": "boolean",
+    "label": "Tutorial and Examples: <a href=\"http://www.h5p.rezeau.org\" target=\"_blank\" rel=\"noopener\">Papi Jo's H5P WordPress site</a>",
+    "description": "<span style=\"color: white;margin-top: -20px;display: table-caption;font-size: large;\">&#9608;</span>",
+    "optional": true
+  },
+  {
     "name": "media",
     "type": "group",
     "label": "Media",
@@ -15,8 +22,7 @@
           "H5P.Video 1.6",
           "H5P.Audio 1.5"
         ],
-        "optional": true,
-        "description": "Optional media to display above the question."
+        "optional": true
       },
       {
         "name": "disableImageZooming",
@@ -42,7 +48,6 @@
     "type": "text",
     "widget": "html",
     "label": "Question",
-    "description": "The objectively gradable question shown above the numerical scale.",
     "importance": "high",
     "enterMode": "p",
     "tags": ["strong", "em", "sub", "sup"]
@@ -113,7 +118,7 @@
     "name": "acceptedTolerance",
     "type": "number",
     "label": "Accepted tolerance (±)",
-    "description": "The accepted interval extends equally above and below the correct answer. Every selectable slider position inside the inclusive interval is correct. Zero requires an exact selectable answer. A positive tolerance allows the correct answer itself to fall between selectable positions.",
+    "description": "Answers within ± this value are accepted. Use 0 for an exact answer.",
     "importance": "high",
     "min": 0,
     "default": 0,
@@ -127,7 +132,7 @@
     "name": "customPoints",
     "type": "list",
     "label": "Custom points",
-    "description": "You control the point order; Scale Question does not sort the list. For numerical or chronological scales, enter points from highest/latest at the top to lowest/earliest at the bottom. Vertical questions display this authored order from top to bottom. Horizontal questions display it in reverse from left to right, placing lower/earlier points on the left and higher/later points on the right. Vertical orientation is generally preferable when a scale contains more than approximately six points or relatively long point labels. Select exactly one point as correct. Reordering a point also moves its correct-answer setting.",
+    "description": "Enter points from highest/latest at the top to lowest/earliest at the bottom. The list is not sorted automatically.",
     "importance": "high",
     "entity": "point",
     "min": 2,
@@ -147,15 +152,13 @@
           "name": "value",
           "type": "text",
           "label": "Value",
-          "description": "Required display value. It is treated as text and is not sorted or interpreted numerically.",
           "importance": "high",
           "maxLength": 40
         },
         {
           "name": "label",
           "type": "text",
-          "label": "Label",
-          "description": "Optional additional context shown with the value.",
+          "label": "Optional label",
           "importance": "medium",
           "optional": true,
           "maxLength": 80
@@ -164,7 +167,7 @@
           "name": "image",
           "type": "image",
           "label": "Thumbnail image",
-          "description": "Optional thumbnail for this point. Thumbnail images are displayed only in vertical Custom point mode.",
+          "description": "Displayed only in vertical Custom points mode.",
           "importance": "medium",
           "optional": true
         },
@@ -172,7 +175,6 @@
           "name": "imageAlt",
           "type": "text",
           "label": "Thumbnail alternative text",
-          "description": "Describe the thumbnail for assistive technologies. Leave empty when the image is decorative or repeats the visible value and label. Thumbnail images are displayed only in vertical Custom point mode.",
           "importance": "medium",
           "optional": true,
           "maxLength": 255
@@ -180,8 +182,7 @@
         {
           "name": "correct",
           "type": "boolean",
-          "label": "Correct point",
-          "description": "Exactly one custom point must be marked correct.",
+          "label": "Unique correct point",
           "importance": "high",
           "default": false
         }
@@ -192,7 +193,6 @@
     "name": "feedbackBelowCorrect",
     "type": "text",
     "label": "Feedback for an answer below the correct position",
-    "description": "Optional feedback for an answer that is too low or too early. For example: “Too early! Try a later date.” or “Too low! Try a higher value.”",
     "importance": "medium",
     "optional": true
   },
@@ -200,7 +200,6 @@
     "name": "feedbackAboveCorrect",
     "type": "text",
     "label": "Feedback for an answer above the correct position",
-    "description": "Optional feedback for an answer that is too high or too late. For example: “Too late! Try an earlier date.” or “Too high! Try a lower value.”",
     "importance": "medium",
     "optional": true
   },
@@ -217,7 +216,6 @@
     "name": "orientation",
     "type": "select",
     "label": "Slider orientation",
-    "description": "Thumbnail images are available only when using Custom points with Vertical orientation.",
     "importance": "medium",
     "options": [
       {
@@ -241,7 +239,7 @@
         "name": "autoCheck",
         "type": "boolean",
         "label": "Automatically check answers after selection",
-        "description": "When enabled, the learner's answer is checked immediately after selecting a value or point. The Check button is not displayed. When disabled, the learner must click Check to submit an answer.",
+        "description": "Checks the answer immediately; hides the Check button.",
         "default": false
       },
       {

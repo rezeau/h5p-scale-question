@@ -1,11 +1,14 @@
 {
   "semantics": [
     {
+      "label": "Tutoriel et exemples : <a href=\"http://www.h5p.rezeau.org\" target=\"_blank\" rel=\"noopener\">Site WordPress-H5P de Papi Jo</a>",
+      "description": "<span style=\"color: white;margin-top: -20px;display: table-caption;font-size: large;\">&#9608;</span>"
+    },
+    {
       "label": "Média",
       "fields": [
         {
-          "label": "Type",
-          "description": "Média facultatif à afficher au-dessus de la question."
+          "label": "Type"
         },
         {
           "label": "Désactiver le zoom sur l’image"
@@ -13,8 +16,7 @@
       ]
     },
     {
-      "label": "Question",
-      "description": "Question à notation objective affichée au-dessus de l’échelle numérique."
+      "label": "Question"
     },
     {
       "label": "Mode de l’échelle",
@@ -41,52 +43,45 @@
     },
     {
       "label": "Tolérance acceptée (±)",
-      "description": "L’intervalle accepté s’étend de manière égale au-dessus et au-dessous de la réponse correcte. Toute position sélectionnable du curseur située dans cet intervalle inclusif est correcte. Une tolérance nulle exige une réponse sélectionnable exacte. Une tolérance positive permet à la réponse correcte de se situer entre deux positions sélectionnables."
+      "description": "Les réponses situées dans cet intervalle sont acceptées. Utilisez 0 pour une réponse exacte."
     },
     {
       "label": "Points de référence personnalisés",
-      "description": "Sur un mode d'échelle avec des points de référence personnalisés, cette liste ne sera pas ordonnée automatiquement. Pour les échelles numériques ou chronologiques, saisissez les points du plus élevé ou du plus récent en haut au plus faible ou au plus ancien en bas. Les questions verticales affichent cet ordre de haut en bas. Les questions horizontales l’affichent en sens inverse de gauche à droite, en plaçant les points plus faibles ou plus anciens à gauche et les points plus élevés ou plus récents à droite. L’orientation verticale est généralement préférable lorsque l’échelle contient plus d’environ six points ou des libellés relativement longs. Cochez un seul point comme étant la réponse correcte attendue. Le réordonnancement d’un point déplace également son réglage de réponse correcte.",
+      "description": "Saisissez les points du plus élevé/récent en haut au plus faible/ancien en bas. La liste n’est pas triée automatiquement.",
       "entity": "point de référence",
       "field": {
         "label": "Point de référence",
         "fields": [
           {
-            "label": "Valeur",
-            "description": "Valeur d’affichage obligatoire. Elle est traitée comme du texte et n’est ni triée ni interprétée comme un nombre."
+            "label": "Valeur"
           },
           {
-            "label": "Libellé",
-            "description": "Contexte supplémentaire facultatif affiché avec la valeur."
+            "label": "Libellé facultatif"
           },
           {
             "label": "Image miniature",
-            "description": "Image miniature facultative pour ce point. Les images miniatures ne sont affichées qu’en mode vertical avec des points de référence personnalisés."
+            "description": "Affichée uniquement en mode vertical avec des points de référence personnalisés."
           },
           {
-            "label": "Texte alternatif de l’image miniature",
-            "description": "Décrivez l’image miniature pour les technologies d’assistance. Laissez ce champ vide lorsque l’image est décorative ou répète la valeur et le libellé visibles. Les images miniatures ne sont affichées qu’en mode vertical avec des points de référence personnalisés."
+            "label": "Texte alternatif de l’image miniature"
           },
           {
-            "label": "Point correct",
-            "description": "Un seul point de référence personnalisé doit être marqué comme correct."
+            "label": "Point correct unique"
           }
         ]
       }
     },
     {
-      "label": "Feedback pour une réponse située en dessous de la position correcte",
-      "description": "Retour facultatif pour une réponse trop faible ou trop précoce. Par exemple : « Trop tôt ! Essayez une date ultérieure. » ou « Trop faible ! Essayez une valeur plus élevée. »"
+      "label": "Feedback pour une réponse située en dessous de la position correcte"
     },
     {
-      "label": "Feedback pour une réponse située au-dessus de la position correcte",
-      "description": "Retour facultatif pour une réponse trop élevée ou trop tardive. Par exemple : « Trop tard ! Essayez une date antérieure. » ou « Trop élevé ! Essayez une valeur plus faible. »"
+      "label": "Feedback pour une réponse située au-dessus de la position correcte"
     },
     {
       "label": "Nombre maximal de tentatives"
     },
     {
       "label": "Orientation du curseur",
-      "description": "Les images miniatures sont disponibles uniquement avec des points de référence personnalisés et une orientation verticale.",
       "options": [
         {
           "label": "Horizontale"
@@ -101,7 +96,7 @@
       "fields": [
         {
           "label": "Vérifier automatiquement les réponses après la sélection",
-          "description": "Lorsque cette option est activée, la réponse de l’apprenant est vérifiée immédiatement après la sélection d’une valeur ou d’un point. Le bouton Vérifier n’est pas affiché. Lorsqu’elle est désactivée, l’apprenant doit cliquer sur Vérifier pour envoyer une réponse."
+          "description": "Vérifie immédiatement la réponse et masque le bouton Vérifier."
         },
         {},
         {

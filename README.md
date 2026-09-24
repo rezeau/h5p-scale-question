@@ -1,6 +1,6 @@
 # H5P.ScaleQuestion
 
-H5P.ScaleQuestion is an interactive, gradable H5P question type in which learners select a position on a scale. This repository contains version 0.2.0.
+H5P.ScaleQuestion is an interactive, gradable H5P question type in which learners select a position on a scale. This repository contains version 0.2.1.
 
 ## Question modes
 
@@ -55,7 +55,7 @@ Numerical configurations require:
 
 Custom-point configurations require 2–12 valid reference points and exactly one point marked correct. Point values are required and are treated as text; labels are optional.
 
-Invalid configurations display localized runtime configuration-error messages. Version 0.2.0 does not provide a custom editor validator.
+Invalid configurations display localized runtime configuration-error messages. Version 0.2.1 does not provide a custom editor validator.
 
 ## Accessibility and localization
 
@@ -68,7 +68,7 @@ English is the source language. A French translation is included in `language/fr
 Library metadata:
 
 - Machine name: `H5P.ScaleQuestion`
-- Version: `0.2.0`
+- Version: `0.2.1`
 - H5P core API: `1.28`
 - Runnable: yes
 - Embedding mode: `iframe`
@@ -99,7 +99,7 @@ From the local H5P development environment, create a validated library-only pack
 
 ```powershell
 cd C:\my_first_h5p_environment\libraries
-h5p utils pack H5P.ScaleQuestion-0.2 H5P.ScaleQuestion-0.2.0.h5p
+h5p utils pack H5P.ScaleQuestion-0.2 H5P.ScaleQuestion-0.2.1.h5p
 ```
 
 This non-recursive command does not bundle dependencies. The `.h5pignore` file excludes tests and other development-only files from the package.
