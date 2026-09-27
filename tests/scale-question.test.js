@@ -39,12 +39,38 @@ const resolveThemeValue = (value, variables = {}) => value.replace(
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-const combinedIncorrectFeedback = (directional, remaining) =>
-  '<div class="h5p-scale-question-feedback-parts">' +
-  '<div class="h5p-scale-question-directional-feedback">' + directional + '</div>' +
-  '<div class="h5p-scale-question-attempt-feedback">Incorrect. ' + remaining +
-  ' attempt' + (remaining === 1 ? '' : 's') + ' remaining.</div>' +
-  '</div>';
+const attemptFeedback = (remaining) => 'Incorrect. ' + remaining + ' attempt' +
+  (remaining === 1 ? '' : 's') + ' remaining.';
+
+const scoreSummary = (score, total = 1) => `You got ${score} of ${total} points`;
+
+const assertContextualFeedback = (instance, { incorrect = '', correct = '' }) => {
+  assert.equal(instance.$contextualFeedback.text(), incorrect);
+  assert.equal(
+    instance.$contextualFeedback.classes.has('h5p-scale-question-contextual-feedback-empty'),
+    !incorrect
+  );
+  assert.ok(instance.$contextualFeedback.classes.has('h5p-scale-question-feedback-incorrect'));
+  assert.equal(instance.$correctContextualFeedback.text(), correct);
+  assert.equal(
+    instance.$correctContextualFeedback.classes.has('h5p-scale-question-contextual-feedback-empty'),
+    !correct
+  );
+  assert.ok(instance.$correctContextualFeedback.classes.has('h5p-scale-question-feedback-correct'));
+  assert.deepEqual(instance.$statusGroup.children, [
+    instance.$contextualFeedback,
+    instance.$correctContextualFeedback,
+    instance.$attemptFeedback
+  ]);
+};
+
+const assertAttemptFeedback = (instance, expected = '') => {
+  assert.equal(instance.$attemptFeedback.text(), expected);
+  assert.equal(
+    instance.$attemptFeedback.classes.has('h5p-scale-question-attempt-feedback-empty'),
+    !expected
+  );
+};
 
 const validParams = (overrides = {}) => ({
   question: '<p>Choose two</p>',
@@ -92,10 +118,18 @@ class FakeElement {
     this.textValue = attributes.text || '';
     this.htmlValue = '';
     this.focused = false;
+    this.parent = null;
   }
 
   appendTo(parent) {
+    if (this.parent) {
+      const index = this.parent.children.indexOf(this);
+      if (index !== -1) {
+        this.parent.children.splice(index, 1);
+      }
+    }
     parent.children.push(this);
+    this.parent = parent;
     return this;
   }
 
@@ -222,7 +256,14 @@ function createRuntime() {
     buttons: {},
     media: [],
     paths: [],
-    registrationOrder: []
+    registrationOrder: [],
+    lifecycle: [],
+    animationFrames: []
+  };
+  calls.flushAnimationFrames = () => {
+    while (calls.animationFrames.length > 0) {
+      calls.animationFrames.splice(0).forEach((callback) => callback());
+    }
   };
 
   function Question(type, options) {
@@ -265,6 +306,7 @@ function createRuntime() {
     };
     this.setFeedback = (...args) => {
       calls.feedback.push(args);
+      calls.lifecycle.push('setFeedback');
       this.trigger('resize');
     };
     this.removeFeedback = () => { calls.feedbackRemoved++; };
@@ -276,6 +318,7 @@ function createRuntime() {
     this.trigger = (event) => {
       calls.events.push(event);
       const name = event instanceof FakeXAPIEvent ? 'xAPI' : event;
+      calls.lifecycle.push(`event:${name}`);
       (this.listeners[name] || []).forEach((handler) => handler.call(this, event));
     };
     this.attach = (container) => {
@@ -292,6 +335,12 @@ function createRuntime() {
   }
 
   const context = {
+    window: {
+      requestAnimationFrame: (callback) => {
+        calls.animationFrames.push(callback);
+        return calls.animationFrames.length;
+      }
+    },
     H5P: {
       jQuery: jquery,
       Question,
@@ -339,8 +388,8 @@ function applyEditorDefaults(fields, params) {
 test('library identity and asset paths are consistent', () => {
   assert.equal(manifest.title, 'Scale Question');
   assert.equal(manifest.machineName, 'H5P.ScaleQuestion');
-  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 2, 1]);
-  assert.equal(packageManifest.version, '0.2.1');
+  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 2, 2]);
+  assert.equal(packageManifest.version, '0.2.2');
   assert.equal(manifest.runnable, 1);
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedJs[0].path)));
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedCss[0].path)));
@@ -390,7 +439,7 @@ test('0.1 content upgrade to 0.2 preserves existing parameters unchanged', () =>
 test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.deepEqual(semantics.map((field) => field.name), [
     'info', 'media', 'question', 'scaleMode', 'minimum', 'maximum', 'step', 'correctValue', 'acceptedTolerance',
-    'customPoints', 'feedbackBelowCorrect', 'feedbackAboveCorrect',
+    'customPoints', 'feedbackBelowCorrect', 'feedbackAboveCorrect', 'feedbackCorrect',
     'maxAttempts', 'orientation', 'behaviour', 'l10n'
   ]);
   assert.deepEqual(semantics[0], {
@@ -464,12 +513,19 @@ test('editor schema exposes numerical and ordered custom-point modes', () => {
   assert.equal(correctPoint.description, undefined);
   const belowFeedback = semantics.find((field) => field.name === 'feedbackBelowCorrect');
   const aboveFeedback = semantics.find((field) => field.name === 'feedbackAboveCorrect');
+  const correctFeedback = semantics.find((field) => field.name === 'feedbackCorrect');
   assert.equal(belowFeedback.type, 'text');
   assert.equal(belowFeedback.optional, true);
   assert.equal(belowFeedback.description, undefined);
   assert.equal(aboveFeedback.type, 'text');
   assert.equal(aboveFeedback.optional, true);
   assert.equal(aboveFeedback.description, undefined);
+  assert.equal(correctFeedback.type, 'text');
+  assert.equal(correctFeedback.label, 'Feedback for a correct answer');
+  assert.equal(correctFeedback.importance, 'medium');
+  assert.equal(correctFeedback.optional, true);
+  assert.equal(correctFeedback.default, undefined);
+  assert.equal(correctFeedback.description, undefined);
   const orientation = semantics.find((field) => field.name === 'orientation');
   assert.equal(orientation.type, 'select');
   assert.equal(orientation.label, 'Slider orientation');
@@ -1282,12 +1338,12 @@ test('attach renders a scale while the initial cursor remains unanswered', () =>
   assert.equal(xAPIEvents(calls).length, 0);
 });
 
-test('numerical value bubble appears initially and custom-point mode omits it', () => {
+test('both modes omit the textual value row while numerical mode retains its value bubble', () => {
   const numerical = createInstance(validParams({ minimum: 10, maximum: 20, step: 2, correctValue: 14 }));
   attach(numerical.instance);
   assert.equal(numerical.instance.$valueBubble.text(), '10');
-  assert.equal(numerical.instance.$valueStatus.text(), '');
-  assert.ok(numerical.instance.$valueStatus.classes.has('h5p-scale-question-value-status-empty'));
+  assert.equal(numerical.instance.$valueStatus, undefined);
+  assert.equal(numerical.instance.$statusGroup.text().includes('Selected value:'), false);
   assert.match(numerical.instance.$slider.attributes['aria-valuetext'], /Cursor at 10/);
   assert.equal(numerical.instance.$valueBubble.attributes['aria-live'], undefined);
   assert.equal(numerical.instance.$valueBubbleTrack.attributes['aria-hidden'], 'true');
@@ -1296,8 +1352,9 @@ test('numerical value bubble appears initially and custom-point mode omits it', 
   attach(custom.instance);
   assert.equal(custom.instance.$valueBubble, null);
   assert.equal(custom.instance.$valueBubbleTrack, null);
-  assert.match(custom.instance.$valueStatus.text(), /Cursor at Freezing/);
-  assert.equal(custom.instance.$valueStatus.classes.has('h5p-scale-question-value-status-empty'), false);
+  assert.equal(custom.instance.$valueStatus, undefined);
+  assert.equal(custom.instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.match(custom.instance.$slider.attributes['aria-valuetext'], /Cursor at Freezing.*Very cold/);
 });
 
 test('numerical value bubble shows formatted values and cursor movement has no answer side effects', () => {
@@ -1310,7 +1367,7 @@ test('numerical value bubble shows formatted values and cursor movement has no a
   attach(instance);
   instance.moveCursor(5);
   assert.equal(instance.$valueBubble.text(), '0.25');
-  assert.equal(instance.$valueStatus.text(), '');
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
   assert.match(instance.$slider.attributes['aria-valuetext'], /Cursor at 0\.25/);
   assert.equal(instance.cursorIndex, 5);
   assert.equal(instance.selectedIndex, null);
@@ -1321,13 +1378,12 @@ test('numerical value bubble shows formatted values and cursor movement has no a
 
   instance.selectPosition(6);
   assert.equal(instance.$valueBubble.text(), '0.5');
-  assert.match(instance.$valueStatus.text(), /Selected value: 0\.5/);
-  assert.equal(instance.$valueStatus.classes.has('h5p-scale-question-value-status-empty'), false);
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
   assert.equal(instance.selectedIndex, 6);
   assert.equal(instance.attemptsUsed, 0);
 });
 
-test('numerical status hides only cursor text and preserves recorded-answer and solution displays', () => {
+test('scale never renders selected-value or correct-answer rows below the scale', () => {
   const { instance } = createInstance(validParams({
     minimum: 0,
     maximum: 10,
@@ -1337,18 +1393,18 @@ test('numerical status hides only cursor text and preserves recorded-answer and 
   }));
   attach(instance);
   instance.moveCursor(1);
-  assert.equal(instance.$valueStatus.text(), '');
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
   assert.match(instance.$slider.attributes['aria-valuetext'], /Cursor at 2/);
 
   instance.selectPosition(1);
-  assert.equal(instance.$valueStatus.text(), 'Selected value: 2');
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
   assert.ok(instance.$slider.classes.has('h5p-scale-question-selected'));
 
   instance.showSolutions();
-  assert.equal(instance.$valueStatus.text(), 'Selected value: 2');
-  assert.equal(instance.$solutionStatus.text(), 'Correct answer: 6');
-  assert.equal(instance.$valueStatus.classes.has('h5p-scale-question-value-status-empty'), false);
-  assert.match(cssSource, /\.h5p-scale-question-value-status-empty\s*\{[^}]*min-height:\s*0;[^}]*margin-top:\s*0/);
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+  assert.match(instance.$slider.attributes['aria-valuetext'], /Correct answer: 6/);
+  assert.doesNotMatch(cssSource, /h5p-scale-question-value-status/);
 });
 
 test('numerical value bubble follows Show Solution, Retry, and Reset', () => {
@@ -1382,7 +1438,7 @@ test('restored numerical cursor is reflected in the value bubble', () => {
   attach(restored.instance);
   assert.equal(restored.instance.cursorIndex, 3);
   assert.equal(restored.instance.$valueBubble.text(), '175');
-  assert.equal(restored.instance.$valueStatus.text(), '');
+  assert.equal(restored.instance.$statusGroup.text().includes('Selected value:'), false);
   assert.match(restored.instance.$slider.attributes['aria-valuetext'], /Cursor at 175/);
 
   original.instance.selectPosition(2);
@@ -1393,7 +1449,8 @@ test('restored numerical cursor is reflected in the value bubble', () => {
   assert.equal(restoredSelection.instance.cursorIndex, 2);
   assert.equal(restoredSelection.instance.selectedIndex, 2);
   assert.equal(restoredSelection.instance.$valueBubble.text(), '150');
-  assert.equal(restoredSelection.instance.$valueStatus.text(), 'Selected value: 150');
+  assert.equal(restoredSelection.instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.match(restoredSelection.instance.$slider.attributes['aria-valuetext'], /Selected value: 150/);
 });
 
 test('value bubble uses orientation-specific handle travel and endpoint clamping styles', () => {
@@ -1629,6 +1686,9 @@ test('H5P.Question resize events remain observable after image load and feedback
 
   instance.selectPosition(1);
   instance.checkAnswer();
+  assert.equal(resizeEvents, 1);
+  assert.equal(calls.feedback.length, 0);
+  calls.flushAnimationFrames();
   assert.equal(resizeEvents, 2);
   assert.equal(instance.isCompleted(), false);
 });
@@ -1792,6 +1852,7 @@ test('custom keyboard movement announces labels and confirms with Enter or Space
   instance.$slider.triggerEvent('keydown', { key: 'ArrowDown', preventDefault() {} });
   assert.equal(instance.cursorIndex, 1);
   assert.equal(instance.selectedIndex, null);
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
   assert.match(instance.$slider.attributes['aria-valuetext'], /Cold.*Low temperature/);
   assert.ok(instance.$pointItems[1].classes.has('h5p-scale-question-point-cursor'));
   instance.$slider.triggerEvent('keydown', { key: 'Enter', preventDefault() {} });
@@ -1997,9 +2058,7 @@ test('selection remains neutral until Check and Retry restores neutral styling i
       attach(instance);
       instance.selectPosition(1);
 
-      assert.ok(instance.$valueStatus.classes.has('h5p-scale-question-value-status-selected'));
-      assert.equal(instance.$valueStatus.classes.has('h5p-scale-question-feedback-correct'), false);
-      assert.equal(instance.$valueStatus.classes.has('h5p-scale-question-feedback-incorrect'), false);
+      assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
       assert.equal(instance.$slider.classes.has('h5p-scale-question-feedback-correct'), false);
       assert.equal(instance.$slider.classes.has('h5p-scale-question-feedback-incorrect'), false);
 
@@ -2015,7 +2074,7 @@ test('selection remains neutral until Check and Retry restores neutral styling i
       }
 
       instance.checkAnswer();
-      assert.ok(instance.$valueStatus.classes.has('h5p-scale-question-feedback-incorrect'));
+      assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
       if (instance.model.mode === 'numerical') {
         assert.ok(instance.$valueBubble.classes.has('h5p-scale-question-feedback-incorrect'));
       }
@@ -2024,9 +2083,7 @@ test('selection remains neutral until Check and Retry restores neutral styling i
       }
 
       instance.retryTask();
-      assert.equal(instance.$valueStatus.classes.has('h5p-scale-question-value-status-selected'), false);
-      assert.equal(instance.$valueStatus.classes.has('h5p-scale-question-feedback-correct'), false);
-      assert.equal(instance.$valueStatus.classes.has('h5p-scale-question-feedback-incorrect'), false);
+      assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
       if (instance.model.mode === 'numerical') {
         assert.equal(instance.$valueBubble.classes.has('h5p-scale-question-value-bubble-selected'), false);
         assert.equal(instance.$valueBubble.classes.has('h5p-scale-question-feedback-incorrect'), false);
@@ -2047,9 +2104,7 @@ test('checked correct selections receive feedback styling without colouring the 
       instance.selectPosition(2);
       instance.checkAnswer();
 
-      assert.ok(instance.$valueStatus.classes.has('h5p-scale-question-feedback-correct'));
-      assert.ok(instance.$valueStatusIcon.classes.has('h5p-scale-question-feedback-icon-correct'));
-      assert.equal(instance.$solutionStatus.text(), '');
+      assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
       assert.equal(instance.$slider.classes.has('h5p-scale-question-feedback-correct'), false);
       if (instance.model.mode === 'numerical') {
         assert.ok(instance.$valueBubble.classes.has('h5p-scale-question-feedback-correct'));
@@ -2085,7 +2140,6 @@ test('theme variables control ordinary, neutral, and evaluated colours without t
   const pointLabels = cssDeclarationsFor('.h5p-scale-question-points');
   const valueBubble = cssDeclarationsFor('.h5p-scale-question-value-bubble');
   const selectedPoint = cssDeclarationsFor('.h5p-scale-question-point-selected');
-  const selectedValue = cssDeclarationsFor('.h5p-scale-question-value-status-selected');
   const pointCursor = cssDeclarationsFor('.h5p-scale-question-point-cursor');
   const sliderFocus = cssDeclarationsFor('.h5p-scale-question-slider:focus-visible');
   const pointSolution = cssDeclarationsFor('.h5p-scale-question-point-solution');
@@ -2096,7 +2150,7 @@ test('theme variables control ordinary, neutral, and evaluated colours without t
   assert.equal(resolveThemeValue(question.color, themed), themed['--h5p-theme-text-primary']);
   assert.equal(resolveThemeValue(bound.color, themed), themed['--h5p-theme-text-primary']);
   assert.equal(resolveThemeValue(pointLabels.color, themed), themed['--h5p-theme-text-primary']);
-  [valueBubble, selectedPoint, selectedValue].forEach((declarations) => {
+  [valueBubble, selectedPoint].forEach((declarations) => {
     assert.equal(resolveThemeValue(declarations.color, themed), themed['--h5p-theme-text-primary']);
     assert.equal(resolveThemeValue(declarations['background-color'], themed), themed['--h5p-theme-alternative-light']);
     const border = declarations['border-color'] || declarations.border;
@@ -2124,8 +2178,6 @@ test('theme variables control ordinary, neutral, and evaluated colours without t
   assert.doesNotMatch(cssSource, /(?:dark|mint|lavender|sunset)[^,{]*\{/i);
   assert.match(cssSource, /content:\s*'\\f00c'/);
   assert.match(cssSource, /content:\s*'\\f00d'/);
-  assert.doesNotMatch(cssSource,
-    /h5p-scale-question-solution-status[^,{]*::(?:before|after)/);
 });
 
 test('custom vertical media layout retains resize behavior and no iframe-height sizing', () => {
@@ -2149,17 +2201,18 @@ test('numerical answers below and above compose directional and one-remaining fe
   ['horizontal', 'vertical'].forEach((orientation) => {
     const feedback = {
       feedbackBelowCorrect: 'Too low! Try a higher value.',
-      feedbackAboveCorrect: 'Too high! Try a lower value.'
+      feedbackAboveCorrect: 'Too high! Try a lower value.',
+      feedbackCorrect: 'This explains the correct answer.'
     };
 
     const below = createInstance(validParams({ orientation, ...feedback }));
     attach(below.instance);
     below.instance.selectPosition(1);
     assert.equal(below.instance.checkAnswer(), false);
-    assert.equal(
-      below.calls.feedback.at(-1)[0],
-      combinedIncorrectFeedback(feedback.feedbackBelowCorrect, 1)
-    );
+    assert.equal(below.calls.feedback.length, 0);
+    assertAttemptFeedback(below.instance, attemptFeedback(1));
+    assertContextualFeedback(below.instance, { incorrect: feedback.feedbackBelowCorrect });
+    assert.equal(below.instance.$statusGroup.text().includes('Selected value:'), false);
     assert.equal(below.instance.attemptsUsed, 1);
     assert.equal(below.instance.getAnswerGiven(), false);
     assert.equal(xAPIEvents(below.calls).length, 0);
@@ -2168,10 +2221,9 @@ test('numerical answers below and above compose directional and one-remaining fe
     attach(above.instance);
     above.instance.selectPosition(3);
     assert.equal(above.instance.checkAnswer(), false);
-    assert.equal(
-      above.calls.feedback.at(-1)[0],
-      combinedIncorrectFeedback(feedback.feedbackAboveCorrect, 1)
-    );
+    assert.equal(above.calls.feedback.length, 0);
+    assertAttemptFeedback(above.instance, attemptFeedback(1));
+    assertContextualFeedback(above.instance, { incorrect: feedback.feedbackAboveCorrect });
     assert.equal(above.instance.attemptsUsed, 1);
     assert.equal(above.instance.getAnswerGiven(), false);
     assert.equal(xAPIEvents(above.calls).length, 0);
@@ -2180,7 +2232,8 @@ test('numerical answers below and above compose directional and one-remaining fe
     attach(correct.instance);
     correct.instance.selectPosition(2);
     assert.equal(correct.instance.checkAnswer(), true);
-    assert.equal(correct.calls.feedback.at(-1)[0], 'Correct.');
+    assert.equal(correct.calls.feedback.at(-1)[0], scoreSummary(1));
+    assertContextualFeedback(correct.instance, { correct: feedback.feedbackCorrect });
     assert.equal(correct.instance.getScore(), 1);
     assert.equal(xAPIEvents(correct.calls).length, 1);
   });
@@ -2197,10 +2250,10 @@ test('custom-point answers below and above compose directional and one-remaining
     attach(below.instance);
     below.instance.selectPosition(3);
     assert.equal(below.instance.checkAnswer(), false);
-    assert.equal(
-      below.calls.feedback.at(-1)[0],
-      combinedIncorrectFeedback(feedback.feedbackBelowCorrect, 1)
-    );
+    assert.equal(below.calls.feedback.length, 0);
+    assertAttemptFeedback(below.instance, attemptFeedback(1));
+    assertContextualFeedback(below.instance, { incorrect: feedback.feedbackBelowCorrect });
+    assert.equal(below.instance.$statusGroup.text().includes('Selected value:'), false);
     assert.equal(below.instance.selectedIndex, 3);
     assert.equal(xAPIEvents(below.calls).length, 0);
 
@@ -2208,10 +2261,9 @@ test('custom-point answers below and above compose directional and one-remaining
     attach(above.instance);
     above.instance.selectPosition(1);
     assert.equal(above.instance.checkAnswer(), false);
-    assert.equal(
-      above.calls.feedback.at(-1)[0],
-      combinedIncorrectFeedback(feedback.feedbackAboveCorrect, 1)
-    );
+    assert.equal(above.calls.feedback.length, 0);
+    assertAttemptFeedback(above.instance, attemptFeedback(1));
+    assertContextualFeedback(above.instance, { incorrect: feedback.feedbackAboveCorrect });
     assert.equal(above.instance.selectedIndex, 1);
     assert.equal(xAPIEvents(above.calls).length, 0);
 
@@ -2219,45 +2271,43 @@ test('custom-point answers below and above compose directional and one-remaining
     attach(correct.instance);
     correct.instance.selectPosition(2);
     assert.equal(correct.instance.checkAnswer(), true);
-    assert.equal(correct.calls.feedback.at(-1)[0], 'Correct.');
+    assert.equal(correct.calls.feedback.at(-1)[0], scoreSummary(1));
     assert.equal(correct.instance.getScore(), 1);
+    assert.equal(correct.instance.$statusGroup.text().includes('Selected value:'), false);
     assert.equal(xAPIEvents(correct.calls).length, 1);
   });
 });
 
-test('missing, one-sided, and empty directional messages use the configured message or generic fallback', () => {
+test('missing, one-sided, and empty directional messages omit empty contextual blocks', () => {
   const cases = [
-    { params: {}, selectedIndex: 1, expected: /1 attempt/ },
+    { params: {}, selectedIndex: 1, expectedContextual: '' },
     {
       params: { feedbackBelowCorrect: 'Move higher.' },
       selectedIndex: 1,
-      expected: combinedIncorrectFeedback('Move higher.', 1)
+      expectedContextual: 'Move higher.'
     },
-    { params: { feedbackBelowCorrect: 'Move higher.' }, selectedIndex: 3, expected: /1 attempt/ },
+    { params: { feedbackBelowCorrect: 'Move higher.' }, selectedIndex: 3, expectedContextual: '' },
     {
       params: { feedbackAboveCorrect: 'Move lower.' },
       selectedIndex: 3,
-      expected: combinedIncorrectFeedback('Move lower.', 1)
+      expectedContextual: 'Move lower.'
     },
-    { params: { feedbackAboveCorrect: 'Move lower.' }, selectedIndex: 1, expected: /1 attempt/ },
+    { params: { feedbackAboveCorrect: 'Move lower.' }, selectedIndex: 1, expectedContextual: '' },
     {
       params: { feedbackBelowCorrect: '   ', feedbackAboveCorrect: '' },
       selectedIndex: 1,
-      expected: /1 attempt/
+      expectedContextual: ''
     }
   ];
 
-  cases.forEach(({ params, selectedIndex, expected }) => {
+  cases.forEach(({ params, selectedIndex, expectedContextual }) => {
     const { instance, calls } = createInstance(validParams(params));
     attach(instance);
     instance.selectPosition(selectedIndex);
     assert.equal(instance.checkAnswer(), false);
-    if (expected instanceof RegExp) {
-      assert.match(calls.feedback.at(-1)[0], expected);
-    }
-    else {
-      assert.equal(calls.feedback.at(-1)[0], expected);
-    }
+    assert.equal(calls.feedback.length, 0);
+    assertAttemptFeedback(instance, attemptFeedback(1));
+    assertContextualFeedback(instance, { incorrect: expectedContextual });
     assert.equal(instance.attemptsUsed, 1);
     assert.equal(xAPIEvents(calls).length, 0);
   });
@@ -2271,34 +2321,153 @@ test('directional feedback pluralizes multiple remaining attempts', () => {
   attach(instance);
   instance.selectPosition(1);
   assert.equal(instance.checkAnswer(), false);
-  assert.equal(
-    calls.feedback.at(-1)[0],
-    combinedIncorrectFeedback('Move higher.', 2)
-  );
-  assert.match(
-    cssSource,
-    /\.h5p-scale-question-feedback-parts\s*\{[^}]*display:\s*grid;[^}]*gap:\s*0\.35rem;/
-  );
+  assert.equal(calls.feedback.length, 0);
+  assertAttemptFeedback(instance, attemptFeedback(2));
+  assertContextualFeedback(instance, { incorrect: 'Move higher.' });
   assert.match(
     cssSource,
     /\.h5p-scale-question-attempt-feedback\s*\{[^}]*font-weight:\s*600;/
   );
+  assert.match(
+    cssSource,
+    /\.h5p-scale-question-contextual-feedback\s*\{[^}]*padding:\s*0\.65rem 0\.75rem;/
+  );
 });
 
-test('final incorrect attempt keeps terminal feedback instead of directional retry guidance', () => {
-  const directional = 'Too low! Try a higher value.';
-  const { instance, calls } = createInstance(validParams({
-    maxAttempts: 1,
-    feedbackBelowCorrect: directional
+test('single final numerical attempt keeps below or above feedback with terminal status', () => {
+  [
+    { selectedIndex: 1, field: 'feedbackBelowCorrect', directional: 'Too low! Try a higher value.' },
+    { selectedIndex: 3, field: 'feedbackAboveCorrect', directional: 'Too high! Try a lower value.' }
+  ].forEach(({ selectedIndex, field, directional }) => {
+    const { instance, calls } = createInstance(validParams({
+      maxAttempts: 1,
+      [field]: directional
+    }));
+    attach(instance);
+    instance.selectPosition(selectedIndex);
+    assert.equal(instance.checkAnswer(), true);
+    assert.equal(instance.attemptsUsed, 1);
+    assert.equal(instance.isCompleted(), true);
+    assert.equal(instance.getScore(), 0);
+    assert.equal(calls.feedback.at(-1)[0], scoreSummary(0));
+    assert.doesNotMatch(calls.feedback.at(-1)[0], /Incorrect\./);
+    assertContextualFeedback(instance, { incorrect: directional });
+    assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+    assert.equal(xAPIEvents(calls).length, 1);
+  });
+});
+
+test('terminal setFeedback calls use visible score summaries while intermediate attempts do not', () => {
+  const intermediate = createInstance(validParams({ maxAttempts: 2 }));
+  attach(intermediate.instance);
+  intermediate.instance.selectPosition(1);
+  intermediate.instance.checkAnswer();
+  assert.equal(intermediate.calls.feedback.length, 0);
+  assertAttemptFeedback(intermediate.instance, attemptFeedback(1));
+
+  const incorrect = createInstance(validParams({ maxAttempts: 1 }));
+  attach(incorrect.instance);
+  incorrect.instance.selectPosition(1);
+  incorrect.instance.checkAnswer();
+  assert.deepEqual(incorrect.calls.feedback.at(-1), [
+    scoreSummary(0), 0, 1, 'You got :num out of :total points'
+  ]);
+  assert.doesNotMatch(incorrect.calls.feedback.at(-1)[0], /Incorrect|attempts? remaining/);
+
+  const correct = createInstance(validParams());
+  attach(correct.instance);
+  correct.instance.selectPosition(2);
+  correct.instance.checkAnswer();
+  assert.deepEqual(correct.calls.feedback.at(-1), [
+    scoreSummary(1), 1, 1, 'You got :num out of :total points'
+  ]);
+  assert.doesNotMatch(correct.calls.feedback.at(-1)[0], /Correct\./);
+
+  const tolerance = createInstance(validParams({
+    correctValue: 2,
+    acceptedTolerance: 1
   }));
-  attach(instance);
-  instance.selectPosition(1);
-  assert.equal(instance.checkAnswer(), true);
-  assert.equal(instance.isCompleted(), true);
-  assert.equal(instance.getScore(), 0);
-  assert.equal(calls.feedback.at(-1)[0], 'Incorrect. 0 attempts remaining.');
-  assert.notEqual(calls.feedback.at(-1)[0], directional);
-  assert.equal(xAPIEvents(calls).length, 1);
+  attach(tolerance.instance);
+  tolerance.instance.selectPosition(1);
+  tolerance.instance.checkAnswer();
+  assert.equal(
+    tolerance.calls.feedback.at(-1)[0],
+    scoreSummary(1) + '. Your answer is within the accepted tolerance of ±1.'
+  );
+
+  const retryDisabled = createInstance(validParams({
+    maxAttempts: 4,
+    behaviour: { enableRetry: false }
+  }));
+  attach(retryDisabled.instance);
+  retryDisabled.instance.selectPosition(1);
+  retryDisabled.instance.checkAnswer();
+  assert.equal(retryDisabled.calls.feedback.at(-1)[0], scoreSummary(0));
+});
+
+test('terminal feedback schedules one post-layout resize after H5P.Question feedback resize', () => {
+  const cases = [
+    { params: validParams({ maxAttempts: 1 }), selectedIndex: 1, score: 0 },
+    {
+      params: validParams({ maxAttempts: 4, behaviour: { enableRetry: false } }),
+      selectedIndex: 1,
+      score: 0
+    },
+    { params: validParams(), selectedIndex: 2, score: 1 },
+    {
+      params: validParams({ correctValue: 2, acceptedTolerance: 1 }),
+      selectedIndex: 1,
+      score: 1
+    }
+  ];
+
+  cases.forEach(({ params, selectedIndex, score }) => {
+    const { instance, calls } = createInstance(params);
+    attach(instance);
+    instance.selectPosition(selectedIndex);
+    instance.checkAnswer();
+    const resizeCount = calls.events.filter((event) => event === 'resize').length;
+    assert.equal(calls.feedback.at(-1)[1], score);
+    assert.ok(calls.lifecycle.lastIndexOf('event:resize') > calls.lifecycle.lastIndexOf('setFeedback'));
+
+    calls.flushAnimationFrames();
+
+    assert.equal(calls.events.filter((event) => event === 'resize').length, resizeCount + 1);
+  });
+
+  const intermediate = createInstance(validParams({ maxAttempts: 2 }));
+  attach(intermediate.instance);
+  intermediate.instance.selectPosition(1);
+  intermediate.instance.checkAnswer();
+  const intermediateResizes = intermediate.calls.events.filter((event) => event === 'resize').length;
+  intermediate.calls.flushAnimationFrames();
+  assert.equal(
+    intermediate.calls.events.filter((event) => event === 'resize').length,
+    intermediateResizes + 1
+  );
+  assert.equal(intermediate.calls.feedback.length, 0);
+});
+
+test('final custom-point attempt keeps authored below or above feedback with terminal status', () => {
+  [
+    { selectedIndex: 3, field: 'feedbackBelowCorrect', directional: 'Choose an earlier point.' },
+    { selectedIndex: 1, field: 'feedbackAboveCorrect', directional: 'Choose a later point.' }
+  ].forEach(({ selectedIndex, field, directional }) => {
+    const { instance, calls } = createInstance(validCustomParams({
+      maxAttempts: 1,
+      [field]: directional
+    }));
+    attach(instance);
+    instance.selectPosition(selectedIndex);
+    assert.equal(instance.checkAnswer(), true);
+    assert.equal(instance.attemptsUsed, 1);
+    assert.equal(instance.isCompleted(), true);
+    assert.equal(instance.getScore(), 0);
+    assert.equal(calls.feedback.at(-1)[0], scoreSummary(0));
+    assertContextualFeedback(instance, { incorrect: directional });
+    assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+    assert.equal(xAPIEvents(calls).length, 1);
+  });
 });
 
 test('automatic checking uses directional feedback only after explicit selection', () => {
@@ -2315,7 +2484,9 @@ test('automatic checking uses directional feedback only after explicit selection
 
   instance.selectPosition(1);
   assert.equal(instance.attemptsUsed, 1);
-  assert.equal(calls.feedback.at(-1)[0], combinedIncorrectFeedback('Move higher.', 1));
+  assert.equal(calls.feedback.length, 0);
+  assertAttemptFeedback(instance, attemptFeedback(1));
+  assertContextualFeedback(instance, { incorrect: 'Move higher.' });
   assert.equal(instance.getAnswerGiven(), false);
   assert.equal(xAPIEvents(calls).length, 0);
 
@@ -2323,7 +2494,7 @@ test('automatic checking uses directional feedback only after explicit selection
   instance.selectPosition(2);
   assert.equal(instance.getAnswerGiven(), true);
   assert.equal(instance.getScore(), 1);
-  assert.equal(calls.feedback.at(-1)[0], 'Correct.');
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(1));
   assert.equal(xAPIEvents(calls).length, 1);
 });
 
@@ -2377,19 +2548,17 @@ test('tolerance directional feedback uses interval bounds in both orientations',
     attach(below.instance);
     below.instance.selectPosition(2);
     assert.equal(below.instance.checkAnswer(), false);
-    assert.equal(
-      below.calls.feedback.at(-1)[0],
-      combinedIncorrectFeedback('Below interval.', 1)
-    );
+    assert.equal(below.calls.feedback.length, 0);
+    assertAttemptFeedback(below.instance, attemptFeedback(1));
+    assertContextualFeedback(below.instance, { incorrect: 'Below interval.' });
 
     const above = createInstance(params);
     attach(above.instance);
     above.instance.selectPosition(8);
     assert.equal(above.instance.checkAnswer(), false);
-    assert.equal(
-      above.calls.feedback.at(-1)[0],
-      combinedIncorrectFeedback('Above interval.', 1)
-    );
+    assert.equal(above.calls.feedback.length, 0);
+    assertAttemptFeedback(above.instance, attemptFeedback(1));
+    assertContextualFeedback(above.instance, { incorrect: 'Above interval.' });
 
     const inside = createInstance(params);
     attach(inside.instance);
@@ -2397,7 +2566,7 @@ test('tolerance directional feedback uses interval bounds in both orientations',
     assert.equal(inside.instance.checkAnswer(), true);
     assert.equal(
       inside.calls.feedback.at(-1)[0],
-      'Correct. Your answer is within the accepted tolerance of ±2.'
+      scoreSummary(1) + '. Your answer is within the accepted tolerance of ±2.'
     );
     assert.equal(inside.instance.getScore(), 1);
   });
@@ -2414,7 +2583,8 @@ test('tolerance directional feedback uses interval bounds in both orientations',
   attach(terminal.instance);
   terminal.instance.selectPosition(2);
   terminal.instance.checkAnswer();
-  assert.equal(terminal.calls.feedback.at(-1)[0], 'Incorrect. 0 attempts remaining.');
+  assert.equal(terminal.calls.feedback.at(-1)[0], scoreSummary(0));
+  assertContextualFeedback(terminal.instance, { incorrect: 'Below interval.' });
 });
 
 test('automatic checking awards tolerance only after explicit selection', () => {
@@ -2438,7 +2608,7 @@ test('automatic checking awards tolerance only after explicit selection', () => 
   assert.equal(xAPIEvents(calls).length, 1);
 });
 
-test('accepted approximate answer appends its tolerance explanation to correct feedback', () => {
+test('accepted approximate answer appends its tolerance explanation to the terminal score summary', () => {
   const { instance, calls } = createInstance(validParams({
     minimum: 4000,
     maximum: 5000,
@@ -2452,11 +2622,11 @@ test('accepted approximate answer appends its tolerance explanation to correct f
   assert.equal(instance.checkAnswer(), true);
   assert.equal(
     calls.feedback.at(-1)[0],
-    'Well done! Your answer is within the accepted tolerance of ±100.'
+    scoreSummary(1) + '. Your answer is within the accepted tolerance of ±100.'
   );
 });
 
-test('exact correct answer preserves correct feedback when tolerance is positive', () => {
+test('exact correct answer uses only the terminal score summary when tolerance is positive', () => {
   const { instance, calls } = createInstance(validParams({
     correctValue: 2,
     acceptedTolerance: 1,
@@ -2465,7 +2635,59 @@ test('exact correct answer preserves correct feedback when tolerance is positive
   attach(instance);
   instance.selectPosition(2);
   instance.checkAnswer();
-  assert.equal(calls.feedback.at(-1)[0], '  Exactly right!  ');
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(1));
+});
+
+test('authored correct feedback remains contextual beside an exact terminal score summary', () => {
+  const contextual = 'That is the target position.';
+  const { instance, calls } = createInstance(validParams({
+    feedbackCorrect: contextual,
+    l10n: { correctFeedback: 'Correct.' }
+  }));
+  attach(instance);
+  instance.selectPosition(2);
+  assert.equal(instance.checkAnswer(), true);
+  assert.equal(instance.getScore(), 1);
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(1));
+  assertContextualFeedback(instance, { correct: contextual });
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+  assert.equal(xAPIEvents(calls).length, 1);
+});
+
+test('authored correct feedback remains contextual beside score and tolerance feedback', () => {
+  const contextual = 'You found the accepted target area.';
+  const generic = scoreSummary(1) + '. Your answer is within the accepted tolerance of ±1.';
+  const { instance, calls } = createInstance(validParams({
+    correctValue: 2,
+    acceptedTolerance: 1,
+    feedbackCorrect: contextual,
+    l10n: { correctFeedback: 'Correct.' }
+  }));
+  attach(instance);
+  instance.selectPosition(1);
+  assert.equal(instance.checkAnswer(), true);
+  assert.equal(instance.getScore(), 1);
+  assert.equal(calls.feedback.at(-1)[0], generic);
+  assertContextualFeedback(instance, { correct: contextual });
+  assert.equal(xAPIEvents(calls).length, 1);
+});
+
+test('missing or empty authored correct feedback preserves terminal score feedback', () => {
+  [
+    {},
+    { feedbackCorrect: '' }
+  ].forEach((overrides) => {
+    const { instance, calls } = createInstance(validParams({
+      ...overrides,
+      l10n: { correctFeedback: 'Correct.' }
+    }));
+    attach(instance);
+    instance.selectPosition(2);
+    assert.equal(instance.checkAnswer(), true);
+    assert.equal(calls.feedback.at(-1)[0], scoreSummary(1));
+    assertContextualFeedback(instance, {});
+  });
 });
 
 test('non-selectable correct answer makes every accepted selectable answer approximate', () => {
@@ -2483,12 +2705,12 @@ test('non-selectable correct answer makes every accepted selectable answer appro
     instance.checkAnswer();
     assert.equal(
       calls.feedback.at(-1)[0],
-      'Correct. Your answer is within the accepted tolerance of ±1.'
+      scoreSummary(1) + '. Your answer is within the accepted tolerance of ±1.'
     );
   });
 });
 
-test('approximate explanation stands alone when correct feedback is empty', () => {
+test('approximate explanation follows the score summary when correct feedback is empty', () => {
   const { instance, calls } = createInstance(validParams({
     correctValue: 2,
     acceptedTolerance: 1,
@@ -2497,7 +2719,10 @@ test('approximate explanation stands alone when correct feedback is empty', () =
   attach(instance);
   instance.selectPosition(1);
   instance.checkAnswer();
-  assert.equal(calls.feedback.at(-1)[0], 'Your answer is within the accepted tolerance of ±1.');
+  assert.equal(
+    calls.feedback.at(-1)[0],
+    scoreSummary(1) + '. Your answer is within the accepted tolerance of ±1.'
+  );
 });
 
 test('approximate explanation uses existing decimal numerical formatting', () => {
@@ -2514,7 +2739,7 @@ test('approximate explanation uses existing decimal numerical formatting', () =>
   instance.checkAnswer();
   assert.equal(
     calls.feedback.at(-1)[0],
-    'Accepted. Your answer is within the accepted tolerance of ±0.25.'
+    scoreSummary(1) + '. Your answer is within the accepted tolerance of ±0.25.'
   );
 });
 
@@ -2527,10 +2752,9 @@ test('incorrect and zero-tolerance answers do not add an approximate explanation
   attach(incorrect.instance);
   incorrect.instance.selectPosition(0);
   assert.equal(incorrect.instance.checkAnswer(), false);
-  assert.equal(
-    incorrect.calls.feedback.at(-1)[0],
-    combinedIncorrectFeedback('Move higher.', 1)
-  );
+  assert.equal(incorrect.calls.feedback.length, 0);
+  assertAttemptFeedback(incorrect.instance, attemptFeedback(1));
+  assertContextualFeedback(incorrect.instance, { incorrect: 'Move higher.' });
 
   const exact = createInstance(validParams({
     acceptedTolerance: 0,
@@ -2539,17 +2763,17 @@ test('incorrect and zero-tolerance answers do not add an approximate explanation
   attach(exact.instance);
   exact.instance.selectPosition(2);
   exact.instance.checkAnswer();
-  assert.equal(exact.calls.feedback.at(-1)[0], 'Unchanged.');
+  assert.equal(exact.calls.feedback.at(-1)[0], scoreSummary(1));
 });
 
-test('custom-point correct feedback remains unchanged', () => {
+test('custom-point correct result uses the terminal score summary', () => {
   const { instance, calls } = createInstance(validCustomParams({
     l10n: { correctFeedback: 'Custom correct.' }
   }));
   attach(instance);
   instance.selectPosition(2);
   instance.checkAnswer();
-  assert.equal(calls.feedback.at(-1)[0], 'Custom correct.');
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(1));
 });
 
 test('Check and automatic-check modes show identical approximate feedback after selection', () => {
@@ -2572,8 +2796,8 @@ test('Check and automatic-check modes show identical approximate feedback after 
   });
 
   assert.deepEqual(feedbackByMode, [
-    'Correct. Your answer is within the accepted tolerance of ±1.',
-    'Correct. Your answer is within the accepted tolerance of ±1.'
+    scoreSummary(1) + '. Your answer is within the accepted tolerance of ±1.',
+    scoreSummary(1) + '. Your answer is within the accepted tolerance of ±1.'
   ]);
 });
 
@@ -2601,8 +2825,8 @@ test('tolerance Show Solution labels an accepted position without moving the sub
     assert.equal(instance.$slider.prop('disabled'), true);
     assert.equal(instance.$slider.val(), 0);
     assert.equal(instance.$slider.attributes['aria-valuetext'], 'Selected value: 0. Correct answer: 4');
-    assert.equal(instance.$valueStatus.text(), 'Selected value: 0');
-    assert.equal(instance.$solutionStatus.text(), 'Correct answer: 4');
+    assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+    assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
     assert.equal(xAPIEvents(calls).length, 0);
   });
 });
@@ -2662,7 +2886,8 @@ test('intermediate incorrect check allows another attempt and emits no action xA
   assert.equal(instance.getAnswerGiven(), false);
   assert.equal(instance.getScore(), 0);
   assert.equal(xAPIEvents(calls).length, 0);
-  assert.match(calls.feedback.at(-1)[0], /1 attempt/);
+  assert.equal(calls.feedback.length, 0);
+  assertAttemptFeedback(instance, attemptFeedback(1));
 });
 
 test('one attempt with Retry disabled preserves terminal single-attempt behavior', () => {
@@ -2678,7 +2903,7 @@ test('one attempt with Retry disabled preserves terminal single-attempt behavior
   assert.equal(instance.awaitingRetry, false);
   assert.equal(instance.terminal, true);
   assert.equal(instance.getScore(), 0);
-  assert.equal(calls.feedback.at(-1)[0], 'Incorrect. 0 attempts remaining.');
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(0));
   assert.equal(calls.buttons['check-answer'].visible, false);
   assert.equal(calls.buttons['try-again'].visible, false);
   assert.equal(calls.buttons['show-solution'].visible, true);
@@ -2702,7 +2927,7 @@ test('Retry disabled makes a correct first answer terminal without rewriting max
   assert.equal(instance.awaitingRetry, false);
   assert.equal(instance.terminal, true);
   assert.equal(instance.getScore(), 1);
-  assert.equal(calls.feedback.at(-1)[0], 'Correct.');
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(1));
   assert.equal(calls.buttons['check-answer'].visible, false);
   assert.equal(calls.buttons['try-again'].visible, false);
   assert.equal(calls.buttons['show-solution'].visible, false);
@@ -2724,8 +2949,8 @@ test('Retry disabled makes an incorrect first answer terminal with terminal feed
   assert.equal(instance.awaitingRetry, false);
   assert.equal(instance.terminal, true);
   assert.equal(instance.getScore(), 0);
-  assert.equal(calls.feedback.at(-1)[0], 'Incorrect. 0 attempts remaining.');
-  assert.doesNotMatch(calls.feedback.at(-1)[0], /remaining attempt|Move higher/);
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(0));
+  assertContextualFeedback(instance, { incorrect: 'Move higher.' });
   assert.equal(calls.buttons['check-answer'].visible, false);
   assert.equal(calls.buttons['try-again'].visible, false);
   assert.equal(calls.buttons['show-solution'].visible, true);
@@ -2826,14 +3051,18 @@ test('Retry-disabled terminal completion fully resets without changing authored 
 });
 
 test('incorrect Check locks interaction until Retry and Retry preserves the attempt budget', () => {
-  const { instance, calls } = createInstance();
+  const { instance, calls } = createInstance(validParams({
+    feedbackBelowCorrect: 'Move higher.'
+  }));
   attach(instance);
   instance.selectPosition(1);
 
   assert.equal(instance.checkAnswer(), false);
   assert.equal(instance.attemptsUsed, 1);
   assert.equal(instance.awaitingRetry, true);
-  assert.equal(calls.feedback.at(-1)[0], 'Incorrect. 1 attempt remaining.');
+  assert.equal(calls.feedback.length, 0);
+  assertAttemptFeedback(instance, attemptFeedback(1));
+  assertContextualFeedback(instance, { incorrect: 'Move higher.' });
   assert.equal(calls.buttons['check-answer'].visible, false);
   assert.equal(calls.buttons['try-again'].visible, true);
   assert.equal(calls.buttons['show-solution'].visible, false);
@@ -2855,7 +3084,9 @@ test('incorrect Check locks interaction until Retry and Retry preserves the atte
   assert.equal(instance.$slider.prop('disabled'), false);
   assert.equal(calls.buttons['try-again'].visible, false);
   assert.equal(calls.buttons['check-answer'].visible, false);
-  assert.equal(calls.feedbackRemoved, 1);
+  assert.equal(calls.feedbackRemoved, 0);
+  assertContextualFeedback(instance, {});
+  assertAttemptFeedback(instance, '');
   assert.equal(xAPIEvents(calls).length, 0);
 });
 
@@ -2873,7 +3104,7 @@ test('two incorrect attempts require one Retry and cannot be extended by repeate
   assert.equal(instance.attemptsUsed, 2);
   assert.equal(instance.terminal, true);
   assert.equal(instance.awaitingRetry, false);
-  assert.equal(calls.feedback.at(-1)[0], 'Incorrect. 0 attempts remaining.');
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(0));
   assert.equal(calls.buttons['check-answer'].visible, false);
   assert.equal(calls.buttons['try-again'].visible, false);
   assert.equal(calls.buttons['show-solution'].visible, true);
@@ -2930,10 +3161,9 @@ test('saved state awaiting Retry restores directional and remaining feedback, lo
   assert.equal(restored.calls.buttons['check-answer'].visible, false);
   assert.equal(restored.calls.buttons['try-again'].visible, true);
   assert.equal(restored.calls.buttons['show-solution'].visible, false);
-  assert.equal(
-    restored.calls.feedback.at(-1)[0],
-    combinedIncorrectFeedback('Move higher.', 1)
-  );
+  assert.equal(restored.calls.feedback.length, 0);
+  assertAttemptFeedback(restored.instance, attemptFeedback(1));
+  assertContextualFeedback(restored.instance, { incorrect: 'Move higher.' });
   assert.equal(xAPIEvents(restored.calls).length, 0);
 
   restored.instance.retryTask();
@@ -3137,7 +3367,7 @@ test('restored state derives Show Solution visibility from terminal result and e
   });
 });
 
-test('terminal numerical Show Solution renders ordered selected and solution rows in both orientations', () => {
+test('terminal numerical Show Solution adds no selected or correct-answer text in either orientation', () => {
   ['horizontal', 'vertical'].forEach((orientation) => {
     const { instance, calls } = createInstance(validParams({ orientation, maxAttempts: 1 }));
     attach(instance);
@@ -3146,15 +3376,9 @@ test('terminal numerical Show Solution renders ordered selected and solution row
     const eventCount = xAPIEvents(calls).length;
     instance.showSolutions();
 
-    assert.equal(instance.$statusGroup.children[0], instance.$valueStatus);
-    assert.equal(instance.$statusGroup.children[1], instance.$solutionStatus);
-    assert.equal(instance.$valueStatus.text(), 'Selected value: 1');
-    assert.equal(instance.$solutionStatus.text(), 'Correct answer: 2');
-    assert.ok(instance.$valueStatus.classes.has('h5p-scale-question-feedback-incorrect'));
-    assert.ok(instance.$valueStatusIcon.classes.has('h5p-scale-question-feedback-icon-incorrect'));
-    assert.equal(instance.$valueStatusIcon.attributes['aria-hidden'], 'true');
-    assert.ok(instance.$solutionStatus.classes.has('h5p-scale-question-feedback-correct'));
-    assert.equal(instance.$solutionStatus.children.length, 1);
+    assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+    assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+    assertContextualFeedback(instance, {});
     assert.equal(instance.$slider.val(), 1);
     assert.equal(instance.cursorIndex, 1);
     assert.equal(instance.selectedIndex, 1);
@@ -3167,8 +3391,10 @@ test('terminal numerical Show Solution renders ordered selected and solution row
   });
 });
 
-test('terminal custom-point Show Solution separates long labels and scale indicators in both orientations', () => {
+test('terminal custom-point Show Solution retains selection state without textual value rows', () => {
   ['horizontal', 'vertical'].forEach((orientation) => {
+    const incorrect = 'This point is on the wrong side of the target.';
+    const correct = 'This explains the revealed custom point.';
     const points = customPoints();
     points[2] = {
       value: 'A deliberately long correct value',
@@ -3178,20 +3404,20 @@ test('terminal custom-point Show Solution separates long labels and scale indica
     const { instance, calls } = createInstance(validCustomParams({
       orientation,
       customPoints: points,
-      maxAttempts: 1
+      maxAttempts: 1,
+      feedbackAboveCorrect: incorrect,
+      feedbackCorrect: correct
     }));
     attach(instance);
     instance.selectPosition(1);
     instance.checkAnswer();
+    assertContextualFeedback(instance, { incorrect });
     const eventCount = xAPIEvents(calls).length;
     instance.showSolutions();
 
-    assert.equal(instance.$valueStatus.text(), 'Selected value: Cold — Low temperature');
-    assert.equal(
-      instance.$solutionStatus.text(),
-      'Correct answer: A deliberately long correct value — ' +
-        'A long explanatory label that must wrap in a narrow container'
-    );
+    assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+    assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+    assertContextualFeedback(instance, { incorrect, correct });
     assert.ok(instance.$pointItems[1].classes.has('h5p-scale-question-feedback-incorrect'));
     assert.ok(instance.$pointItems[2].classes.has('h5p-scale-question-point-solution'));
     assert.equal(instance.$pointItems[2].classes.has('h5p-scale-question-feedback-correct'), false);
@@ -3203,11 +3429,11 @@ test('terminal custom-point Show Solution separates long labels and scale indica
     assert.equal(xAPIEvents(calls).length, eventCount);
   });
 
-  assert.match(cssSource, /\.h5p-scale-question-value-status\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  assert.doesNotMatch(cssSource, /h5p-scale-question-value-status/);
   assert.match(cssSource, /\.h5p-scale-question-custom-viewport\s*\{[^}]*overflow-x:\s*auto/);
 });
 
-test('Retry-disabled terminal Show Solution uses the same two-row display', () => {
+test('Retry-disabled terminal Show Solution keeps the compact numerical display', () => {
   const { instance, calls } = createInstance(validParams({
     maxAttempts: 4,
     behaviour: { enableRetry: false }
@@ -3220,8 +3446,8 @@ test('Retry-disabled terminal Show Solution uses the same two-row display', () =
   assert.equal(calls.buttons['show-solution'].visible, true);
 
   calls.buttons['show-solution'].callback();
-  assert.equal(instance.$valueStatus.text(), 'Selected value: 1');
-  assert.equal(instance.$solutionStatus.text(), 'Correct answer: 2');
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
   assert.equal(instance.awaitingRetry, false);
   assert.equal(instance.attemptsUsed, 1);
   assert.equal(xAPIEvents(calls).length, 1);
@@ -3242,14 +3468,18 @@ test('exhausted attempts retain the submitted answer when revealing the solution
   assert.equal(instance.cursorIndex, 1);
   assert.equal(instance.attemptsUsed, 2);
   assert.equal(instance.getScore(), 0);
-  assert.equal(instance.$valueStatus.text(), 'Selected value: 1');
-  assert.equal(instance.$solutionStatus.text(), 'Correct answer: 2');
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
   assert.deepEqual(plain(xAPIEvents(calls)[0].data.statement), event);
   assert.equal(xAPIEvents(calls).length, 1);
 });
 
-test('saved Show Solution state restores two rows and normalizes an old moved cursor', () => {
-  const params = validParams({ maxAttempts: 1 });
+test('saved Show Solution state restores correct feedback and normalizes an old moved cursor', () => {
+  const params = validParams({
+    maxAttempts: 1,
+    feedbackBelowCorrect: 'The submitted answer was too low.',
+    feedbackCorrect: 'This is why the revealed answer is correct.'
+  });
   const original = createInstance(params);
   attach(original.instance);
   original.instance.selectPosition(1);
@@ -3264,31 +3494,42 @@ test('saved Show Solution state restores two rows and normalizes an old moved cu
   assert.equal(restored.instance.selectedIndex, 1);
   assert.equal(restored.instance.cursorIndex, 1);
   assert.equal(restored.instance.$slider.val(), 1);
-  assert.equal(restored.instance.$valueStatus.text(), 'Selected value: 1');
-  assert.equal(restored.instance.$solutionStatus.text(), 'Correct answer: 2');
+  assert.equal(restored.instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(restored.instance.$statusGroup.text().includes('Correct answer:'), false);
   assert.equal(restored.instance.$slider.attributes['aria-valuetext'],
     'Selected value: 1. Correct answer: 2');
+  assertContextualFeedback(restored.instance, {
+    incorrect: 'The submitted answer was too low.',
+    correct: 'This is why the revealed answer is correct.'
+  });
+  assert.equal(restored.calls.feedback.length, 0);
   assert.equal(xAPIEvents(restored.calls).length, 0);
 });
 
-test('Reset removes solution rows and solution-specific scale styling', () => {
-  const { instance } = createInstance(validCustomParams({ maxAttempts: 1 }));
+test('Reset removes compact feedback and solution-specific scale styling', () => {
+  const contextual = 'The warm point is the solution.';
+  const { instance, calls } = createInstance(validCustomParams({
+    maxAttempts: 1,
+    feedbackCorrect: contextual
+  }));
   attach(instance);
   instance.selectPosition(1);
   instance.checkAnswer();
   instance.showSolutions();
+  assertContextualFeedback(instance, { correct: contextual });
   instance.resetTask();
 
   assert.equal(instance.solutionVisible, false);
-  assert.equal(instance.$solutionStatus.text(), '');
-  assert.ok(instance.$solutionStatus.classes.has('h5p-scale-question-value-status-empty'));
-  assert.equal(instance.$solutionStatus.classes.has('h5p-scale-question-feedback-correct'), false);
   assert.equal(instance.$pointItems[2].classes.has('h5p-scale-question-point-solution'), false);
-  assert.equal(instance.$valueStatusIcon.classes.has('h5p-scale-question-feedback-icon-incorrect'), false);
   assert.equal(instance.$slider.prop('disabled'), false);
+  assertContextualFeedback(instance, {});
+  assertAttemptFeedback(instance, '');
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.match(instance.$slider.attributes['aria-valuetext'], /Cursor at Freezing.*Very cold/);
+  assert.equal(calls.feedbackRemoved, 1);
 });
 
-test('Show Solution click preserves final answer, result, attempts, feedback, and xAPI', () => {
+test('Show Solution click preserves the terminal result UI and result state', () => {
   const { instance, calls } = createInstance(validParams({
     maxAttempts: 1,
     minimum: 0,
@@ -3302,7 +3543,6 @@ test('Show Solution click preserves final answer, result, attempts, feedback, an
   instance.checkAnswer();
   const recordedAnswer = instance.selectedIndex;
   const attempts = instance.attemptsUsed;
-  const feedback = calls.feedback.at(-1)[0];
   const eventCount = xAPIEvents(calls).length;
   assert.equal(calls.buttons['show-solution'].visible, true);
 
@@ -3312,11 +3552,159 @@ test('Show Solution click preserves final answer, result, attempts, feedback, an
   assert.equal(instance.attemptsUsed, attempts);
   assert.equal(instance.getScore(), 0);
   assert.equal(instance.getAnswerGiven(), true);
-  assert.equal(calls.feedback.at(-1)[0], feedback);
+  assert.equal(calls.feedbackRemoved, 0);
+  assert.equal(calls.feedback.length, 1);
+  assert.deepEqual(calls.feedback.at(-1), [
+    scoreSummary(0), 0, 1, 'You got :num out of :total points'
+  ]);
   assert.equal(xAPIEvents(calls).length, eventCount);
-  assert.equal(instance.$valueStatus.text(), 'Selected value: 0');
-  assert.equal(instance.$solutionStatus.text(), 'Correct answer: 6');
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
   assert.equal(calls.buttons['show-solution'].visible, false);
+});
+
+test('Show Solution displays incorrect then correct contextual feedback and removes attempts text', () => {
+  const incorrect = 'Move higher to reach the target.';
+  const correct = 'The correct position is explained here.';
+  const { instance, calls } = createInstance(validParams({
+    maxAttempts: 1,
+    feedbackBelowCorrect: incorrect,
+    feedbackCorrect: correct
+  }));
+  attach(instance);
+  instance.selectPosition(1);
+  instance.checkAnswer();
+  const attempts = instance.attemptsUsed;
+  const eventCount = xAPIEvents(calls).length;
+  calls.flushAnimationFrames();
+  const resizeCount = calls.events.filter((event) => event === 'resize').length;
+
+  instance.showSolutions();
+  instance.showSolutions();
+  calls.flushAnimationFrames();
+
+  assert.equal(instance.solutionVisible, true);
+  assert.equal(instance.attemptsUsed, attempts);
+  assert.equal(instance.getScore(), 0);
+  assert.equal(instance.getAnswerGiven(), true);
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+  assertContextualFeedback(instance, { incorrect, correct });
+  assertAttemptFeedback(instance, '');
+  assert.equal(calls.feedbackRemoved, 0);
+  assert.equal(calls.feedback.length, 1);
+  assert.equal(calls.feedback.at(-1)[0], scoreSummary(0));
+  assert.equal(calls.events.filter((event) => event === 'resize').length, resizeCount + 1);
+  assert.equal(xAPIEvents(calls).length, eventCount);
+});
+
+test('programmatic and repeated Show Solution keep one incorrect contextual row without side effects', () => {
+  const incorrect = 'The selected value is below the target.';
+  const correct = 'Use this explanation with the revealed solution.';
+  const { instance, calls } = createInstance(validParams({
+    feedbackBelowCorrect: incorrect,
+    feedbackCorrect: correct
+  }));
+  attach(instance);
+  instance.selectPosition(1);
+  calls.flushAnimationFrames();
+  const resizeCount = calls.events.filter((event) => event === 'resize').length;
+
+  instance.showSolutions();
+  instance.showSolutions();
+  calls.flushAnimationFrames();
+
+  assert.equal(instance.solutionVisible, true);
+  assert.equal(instance.attemptsUsed, 0);
+  assert.equal(instance.getScore(), 0);
+  assert.equal(instance.getAnswerGiven(), false);
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+  assert.equal(xAPIEvents(calls).length, 0);
+  assert.equal(calls.feedback.length, 0);
+  assert.equal(instance.$statusGroup.children.length, 3);
+  assertContextualFeedback(instance, { incorrect });
+  assert.equal(calls.events.filter((event) => event === 'resize').length, resizeCount + 1);
+});
+
+test('programmatic Show Solution from awaiting Retry shows correct feedback and Retry clears it', () => {
+  const correct = 'This explains the revealed answer.';
+  const { instance, calls } = createInstance(validParams({
+    maxAttempts: 2,
+    feedbackCorrect: correct
+  }));
+  attach(instance);
+  instance.selectPosition(1);
+  instance.checkAnswer();
+  assert.equal(instance.awaitingRetry, true);
+  assert.equal(calls.feedback.length, 0);
+  assertAttemptFeedback(instance, attemptFeedback(1));
+
+  instance.showSolutions();
+  instance.showSolutions();
+
+  assert.equal(instance.solutionVisible, true);
+  assert.equal(instance.terminal, false);
+  assert.equal(instance.attemptsUsed, 1);
+  assert.equal(instance.getAnswerGiven(), false);
+  assert.equal(instance.getScore(), 0);
+  assert.equal(calls.feedbackRemoved, 0);
+  assert.equal(calls.feedback.length, 0);
+  assertContextualFeedback(instance, { correct });
+  assertAttemptFeedback(instance, '');
+  assert.equal(xAPIEvents(calls).length, 0);
+
+  instance.retryTask();
+  assert.equal(instance.solutionVisible, false);
+  assert.equal(instance.awaitingRetry, false);
+  assertContextualFeedback(instance, {});
+});
+
+test('programmatic Show Solution without a selection adds no textual answer or correct feedback', () => {
+  const correct = 'Use this explanation with the revealed solution.';
+  const { instance, calls } = createInstance(validParams({ feedbackCorrect: correct }));
+  attach(instance);
+
+  instance.showSolutions();
+  instance.showSolutions();
+
+  assert.equal(instance.solutionVisible, true);
+  assert.equal(instance.selectedIndex, null);
+  assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+  assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+  assertContextualFeedback(instance, {});
+  assert.equal(instance.getScore(), 0);
+  assert.equal(instance.getAnswerGiven(), false);
+  assert.equal(xAPIEvents(calls).length, 0);
+});
+
+test('missing or empty authored feedback leaves no empty compact row after Show Solution', () => {
+  [
+    { overrides: {}, incorrect: 'Move higher.' },
+    { overrides: { feedbackCorrect: '' }, incorrect: 'Move higher.' },
+    {
+      overrides: { feedbackBelowCorrect: '', feedbackCorrect: 'This is the target.' },
+      incorrect: '',
+      correct: 'This is the target.'
+    },
+    { overrides: { feedbackBelowCorrect: '', feedbackCorrect: '' }, incorrect: '', correct: '' }
+  ].forEach(({ overrides, incorrect, correct = '' }) => {
+    const { instance, calls } = createInstance(validParams({
+      maxAttempts: 1,
+      feedbackBelowCorrect: 'Move higher.',
+      ...overrides
+    }));
+    attach(instance);
+    instance.selectPosition(1);
+    instance.checkAnswer();
+    assertContextualFeedback(instance, { incorrect });
+    instance.showSolutions();
+
+    assert.equal(calls.feedbackRemoved, 0);
+    assertContextualFeedback(instance, { incorrect, correct });
+    assert.equal(instance.$statusGroup.text().includes('Selected value:'), false);
+    assert.equal(instance.$statusGroup.text().includes('Correct answer:'), false);
+  });
 });
 
 test('unfinished state restores without completion or events', () => {
@@ -3478,7 +3866,9 @@ test('runtime localization semantics expose the current feedback templates', () 
   assert.equal(byName.incorrectFeedback, undefined);
   assert.equal(byName.incorrectFeedbackSingular.default, 'Incorrect. @remaining attempt remaining.');
   assert.equal(byName.incorrectFeedbackPlural.default, 'Incorrect. @remaining attempts remaining.');
-  assert.equal(byName.terminalIncorrectFeedback.default, 'Incorrect. 0 attempts remaining.');
+  assert.equal(byName.terminalIncorrectFeedback.default, '0 attempts remaining.');
+  assert.equal(byName.scoreFeedback.default, 'You got @score of @total points');
+  assert.notEqual(byName.scoreFeedback, byName.scoreBarLabel);
   const singularIndex = l10n.fields.findIndex((field) => field.name === 'incorrectFeedbackSingular');
   assert.deepEqual(
     l10n.fields.slice(singularIndex, singularIndex + 3).map((field) => field.name),
@@ -3585,14 +3975,17 @@ test('accepted tolerance feedback uses its localized template and placeholder', 
     correctValue: 2,
     acceptedTolerance: 1,
     l10n: {
-      correctFeedback: 'Juste !',
+      scoreFeedback: 'Votre score est de @score sur @total',
       acceptedToleranceFeedback: 'Tolérance acceptée : ±@tolerance.'
     }
   }));
   attach(instance);
   instance.selectPosition(1);
   instance.checkAnswer();
-  assert.equal(calls.feedback.at(-1)[0], 'Juste ! Tolérance acceptée : ±1.');
+  assert.equal(
+    calls.feedback.at(-1)[0],
+    'Votre score est de 1 sur 1. Tolérance acceptée : ±1.'
+  );
 });
 
 test('singular and plural attempt feedback use complete localized templates', () => {
@@ -3610,7 +4003,8 @@ test('singular and plural attempt feedback use complete localized templates', ()
     attach(instance);
     instance.selectPosition(1);
     instance.checkAnswer();
-    assert.equal(calls.feedback.at(-1)[0], expected);
+    assert.equal(calls.feedback.length, 0);
+    assertAttemptFeedback(instance, expected);
   });
 
   const partial = createInstance(validParams({ l10n: { correctFeedback: 'Right.' } }));
@@ -3625,12 +4019,15 @@ test('singular and plural attempt feedback use complete localized templates', ()
 
   const terminal = createInstance(validParams({
     maxAttempts: 1,
-    l10n: { terminalIncorrectFeedback: 'Aucune tentative restante.' }
+    l10n: {
+      scoreFeedback: 'Votre score est de @score sur @total',
+      terminalIncorrectFeedback: 'Aucune tentative restante.'
+    }
   }));
   attach(terminal.instance);
   terminal.instance.selectPosition(1);
   terminal.instance.checkAnswer();
-  assert.equal(terminal.calls.feedback.at(-1)[0], 'Aucune tentative restante.');
+  assert.equal(terminal.calls.feedback.at(-1)[0], 'Votre score est de 0 sur 1');
 });
 
 test('localized fallback title is used only when metadata has no title', () => {
@@ -3804,10 +4201,11 @@ test('French covers every active l10n default and every configuration error', ()
     tryAgain: 'Retry',
     showSolution: 'Show solution',
     correctAnswer: 'Correct answer: @value',
+    scoreFeedback: 'You got @score of @total points',
     correctFeedback: 'Correct.',
     incorrectFeedbackSingular: 'Incorrect. @remaining attempt remaining.',
     incorrectFeedbackPlural: 'Incorrect. @remaining attempts remaining.',
-    terminalIncorrectFeedback: 'Incorrect. 0 attempts remaining.',
+    terminalIncorrectFeedback: '0 attempts remaining.',
     acceptedRange: 'Accepted interval: @lower to @upper. Slider shows accepted position @value.',
     acceptedToleranceFeedback: 'Your answer is within the accepted tolerance of ±@tolerance.',
     scoreBarLabel: 'You got :num out of :total points',
@@ -3855,7 +4253,11 @@ test('French covers every active l10n default and every configuration error', ()
 
   assert.equal(translatedDefaults.incorrectFeedbackSingular, 'Incorrect. Il reste @remaining tentative.');
   assert.equal(translatedDefaults.incorrectFeedbackPlural, 'Incorrect. Il reste @remaining tentatives.');
-  assert.equal(translatedDefaults.terminalIncorrectFeedback, 'Incorrect. Il ne reste aucune tentative.');
+  assert.equal(translatedDefaults.terminalIncorrectFeedback, 'Il ne reste aucune tentative.');
+  assert.equal(
+    translatedDefaults.scoreFeedback,
+    'Votre score est de @score sur @total'
+  );
   assert.equal(translatedDefaults.correctAnswer, 'Bonne réponse : @value');
   assert.equal(translatedDefaults.defaultTitle, 'Question sur une échelle');
 });
@@ -3954,7 +4356,7 @@ test('French uses the approved increment, correct-answer, custom-point, and feed
     );
   });
 
-  ['feedbackBelowCorrect', 'feedbackAboveCorrect'].forEach((name) => {
+  ['feedbackBelowCorrect', 'feedbackAboveCorrect', 'feedbackCorrect'].forEach((name) => {
     assert.match(translatedTopLevel(name).label, /^Feedback\b/);
     assert.equal(translatedTopLevel(name).description, undefined);
   });
@@ -4008,7 +4410,8 @@ test('French l10n defaults are consumed without changing attempts, scoring, or x
   assert.equal(calls.buttons['show-solution'].label, 'Afficher la solution');
   instance.selectPosition(1);
   assert.equal(instance.checkAnswer(), false);
-  assert.equal(calls.feedback.at(-1)[0], 'Incorrect. Il reste 1 tentative.');
+  assert.equal(calls.feedback.length, 0);
+  assertAttemptFeedback(instance, 'Incorrect. Il reste 1 tentative.');
   assert.equal(instance.attemptsUsed, 1);
   assert.equal(xAPIEvents(calls).length, 0);
 

@@ -78,6 +78,9 @@
       "label": "Feedback pour une réponse située au-dessus de la position correcte"
     },
     {
+      "label": "Feedback pour une réponse correcte"
+    },
+    {
       "label": "Nombre maximal de tentatives"
     },
     {
@@ -143,20 +146,24 @@
           "default": "Bonne réponse : @value"
         },
         {
+          "label": "Résumé visible du score final",
+          "default": "Votre score est de @score sur @total"
+        },
+        {
           "label": "Feedback pour une réponse correcte",
           "default": "Correct."
         },
         {
-          "label": "Feedback intermédiaire incorrect avec une tentative restante",
+          "label": "Feedback intermédiaire avec une tentative restante",
           "default": "Incorrect. Il reste @remaining tentative."
         },
         {
-          "label": "Feedback intermédiaire incorrect avec plusieurs tentatives restantes",
+          "label": "Feedback intermédiaire avec plusieurs tentatives restantes",
           "default": "Incorrect. Il reste @remaining tentatives."
         },
         {
-          "label": "Feedback incorrect final",
-          "default": "Incorrect. Il ne reste aucune tentative."
+          "label": "Feedback final sur les tentatives",
+          "default": "Il ne reste aucune tentative."
         },
         {
           "label": "Texte de solution pour l’intervalle accepté",

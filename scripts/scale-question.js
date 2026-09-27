@@ -17,6 +17,7 @@ H5P.ScaleQuestion = (function ($, Question) {
     customPoints: [],
     feedbackBelowCorrect: '',
     feedbackAboveCorrect: '',
+    feedbackCorrect: '',
     maxAttempts: 2,
     orientation: 'horizontal',
     behaviour: {
@@ -33,10 +34,11 @@ H5P.ScaleQuestion = (function ($, Question) {
       tryAgain: 'Retry',
       showSolution: 'Show solution',
       correctAnswer: 'Correct answer: @value',
+      scoreFeedback: 'You got @score of @total points',
       correctFeedback: 'Correct.',
       incorrectFeedbackSingular: 'Incorrect. @remaining attempt remaining.',
       incorrectFeedbackPlural: 'Incorrect. @remaining attempts remaining.',
-      terminalIncorrectFeedback: 'Incorrect. 0 attempts remaining.',
+      terminalIncorrectFeedback: '0 attempts remaining.',
       acceptedRange: 'Accepted interval: @lower to @upper. Slider shows accepted position @value.',
       acceptedToleranceFeedback: 'Your answer is within the accepted tolerance of ±@tolerance.',
       scoreBarLabel: 'You got :num out of :total points',
@@ -350,11 +352,11 @@ H5P.ScaleQuestion = (function ($, Question) {
     this.$pointList = null;
     this.$pointItems = [];
     this.$statusGroup = null;
-    this.$valueStatus = null;
-    this.$valueStatusIcon = null;
-    this.$valueStatusText = null;
-    this.$solutionStatus = null;
-    this.$solutionStatusText = null;
+    this.$contextualFeedback = null;
+    this.$correctContextualFeedback = null;
+    this.$attemptFeedback = null;
+    this.terminalFeedbackResizePending = false;
+    this.resizeFramePending = false;
     this.pointListId = 'h5p-scale-question-points-' + contentId;
     this.terminalEventEmitted = false;
     this.lastCommittedIndex = null;
@@ -627,22 +629,17 @@ H5P.ScaleQuestion = (function ($, Question) {
       'role': 'status',
       'aria-live': 'polite'
     }).appendTo($wrapper);
-    this.$valueStatus = $('<div>', {
-      'class': 'h5p-scale-question-value-status'
+    this.$contextualFeedback = $('<div>', {
+      'class': 'h5p-scale-question-contextual-feedback h5p-scale-question-contextual-feedback-empty ' +
+        'h5p-scale-question-feedback-incorrect'
     }).appendTo(this.$statusGroup);
-    this.$valueStatusIcon = $('<span>', {
-      'class': 'h5p-scale-question-feedback-icon',
-      'aria-hidden': 'true'
-    }).appendTo(this.$valueStatus);
-    this.$valueStatusText = $('<span>', {
-      'class': 'h5p-scale-question-value-status-text'
-    }).appendTo(this.$valueStatus);
-    this.$solutionStatus = $('<div>', {
-      'class': 'h5p-scale-question-value-status h5p-scale-question-solution-status'
+    this.$correctContextualFeedback = $('<div>', {
+      'class': 'h5p-scale-question-contextual-feedback h5p-scale-question-contextual-feedback-empty ' +
+        'h5p-scale-question-feedback-correct'
     }).appendTo(this.$statusGroup);
-    this.$solutionStatusText = $('<span>', {
-      'class': 'h5p-scale-question-value-status-text'
-    }).appendTo(this.$solutionStatus);
+    this.$attemptFeedback = $('<div>', {
+      'class': 'h5p-scale-question-attempt-feedback h5p-scale-question-attempt-feedback-empty'
+    }).appendTo(this.$statusGroup);
 
     this.setContent($wrapper);
     this.addButton('check-answer', this.params.l10n.checkAnswer, function () {
@@ -656,12 +653,21 @@ H5P.ScaleQuestion = (function ($, Question) {
     }, false, {}, { styleType: 'secondary', icon: 'show-solutions' });
     this.on('resize', function () {
       self.positionValueBubble();
+      if (self.terminalFeedbackResizePending) {
+        self.terminalFeedbackResizePending = false;
+        self.requestResizeAfterLayout();
+      }
     });
     this.updateView();
     if (this.awaitingRetry) {
-      this.setFeedback(
-        this.getIntermediateIncorrectFeedback(),
-        0, MAX_SCORE, this.params.l10n.scoreBarLabel
+      this.updateContextualFeedback(true, false);
+      this.updateAttemptFeedback(true);
+    }
+    else if (this.solutionVisible) {
+      this.updateContextualFeedback(
+        this.selectedIndex !== null && !this.isCorrectIndex(this.selectedIndex),
+        this.selectedIndex !== null && !this.isCorrectIndex(this.selectedIndex) &&
+          (this.terminal || this.awaitingRetry)
       );
     }
   };
@@ -885,6 +891,25 @@ H5P.ScaleQuestion = (function ($, Question) {
     }
   };
 
+  ScaleQuestion.prototype.requestResizeAfterLayout = function () {
+    if (this.resizeFramePending) {
+      return;
+    }
+
+    this.resizeFramePending = true;
+    var self = this;
+    var triggerResize = function () {
+      self.resizeFramePending = false;
+      self.trigger('resize');
+    };
+    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+      window.requestAnimationFrame(triggerResize);
+    }
+    else {
+      triggerResize();
+    }
+  };
+
   ScaleQuestion.prototype.updateView = function () {
     var selectionEvaluated = this.selectedIndex !== null && (this.awaitingRetry || this.terminal);
     var selectionCorrect = selectionEvaluated && this.isCorrectIndex(this.selectedIndex);
@@ -941,25 +966,6 @@ H5P.ScaleQuestion = (function ($, Question) {
         .toggleClass('h5p-scale-question-point-solution', this.solutionVisible && index === this.model.correctIndex);
     }, this);
 
-    if (this.$valueStatus) {
-      var hideNumericalCursorStatus = this.model.mode === 'numerical' &&
-        this.selectedIndex === null && !this.solutionVisible;
-      var valueStatus = this.solutionVisible ? selectedStatus : status;
-      var hideValueStatus = this.solutionVisible ? this.selectedIndex === null : hideNumericalCursorStatus;
-      this.$valueStatus
-        .toggleClass('h5p-scale-question-value-status-empty', hideValueStatus)
-        .toggleClass('h5p-scale-question-value-status-selected', this.selectedIndex !== null)
-        .toggleClass('h5p-scale-question-feedback-correct', selectionCorrect)
-        .toggleClass('h5p-scale-question-feedback-incorrect', selectionIncorrect);
-      this.$valueStatusText.text(hideValueStatus ? '' : valueStatus);
-      this.$valueStatusIcon
-        .toggleClass('h5p-scale-question-feedback-icon-correct', selectionCorrect)
-        .toggleClass('h5p-scale-question-feedback-icon-incorrect', selectionIncorrect);
-      this.$solutionStatus
-        .toggleClass('h5p-scale-question-value-status-empty', !this.solutionVisible)
-        .toggleClass('h5p-scale-question-feedback-correct', this.solutionVisible);
-      this.$solutionStatusText.text(solutionStatus);
-    }
     this.updateButtons();
   };
 
@@ -994,28 +1000,20 @@ H5P.ScaleQuestion = (function ($, Question) {
     return typeof feedback === 'string' ? feedback.trim() : '';
   };
 
-  ScaleQuestion.prototype.getCorrectFeedback = function () {
-    var feedback = typeof this.params.l10n.correctFeedback === 'string' ?
-      this.params.l10n.correctFeedback : '';
+  ScaleQuestion.prototype.getAcceptedToleranceFeedback = function () {
     var selectedValue = this.model.mode === 'numerical' && Number.isInteger(this.selectedIndex) ?
       this.model.minimum + this.selectedIndex * this.model.step : null;
 
     if (this.model.mode !== 'numerical' || this.model.tolerance <= 0 ||
         !this.isCorrectIndex(this.selectedIndex) || selectedValue === this.model.correct) {
-      return feedback;
+      return '';
     }
 
-    feedback = feedback.trim();
-    var explanation = replaceToken(
+    return replaceToken(
       this.params.l10n.acceptedToleranceFeedback,
       '@tolerance',
       this.formatScaledValue(this.model.tolerance)
     );
-    if (!feedback) {
-      return explanation;
-    }
-
-    return feedback + (/[.!?:;]$/.test(feedback) ? ' ' : '. ') + explanation;
   };
 
   ScaleQuestion.prototype.getIncorrectFeedback = function () {
@@ -1026,18 +1024,53 @@ H5P.ScaleQuestion = (function ($, Question) {
     return replaceToken(template, '@remaining', remaining);
   };
 
-  ScaleQuestion.prototype.getIntermediateIncorrectFeedback = function () {
-    var directionalFeedback = this.getDirectionalFeedback();
-    var attemptFeedback = this.getIncorrectFeedback();
-
-    if (!directionalFeedback) {
-      return attemptFeedback;
+  ScaleQuestion.prototype.updateContextualFeedback = function (showIncorrect, showCorrect) {
+    if (!this.$contextualFeedback || !this.$correctContextualFeedback) {
+      return;
     }
 
-    return '<div class="h5p-scale-question-feedback-parts">' +
-      '<div class="h5p-scale-question-directional-feedback">' + directionalFeedback + '</div>' +
-      '<div class="h5p-scale-question-attempt-feedback">' + attemptFeedback + '</div>' +
-      '</div>';
+    var incorrectFeedback = showIncorrect ? this.getDirectionalFeedback() : '';
+    var correctFeedback = showCorrect && typeof this.params.feedbackCorrect === 'string' ?
+      this.params.feedbackCorrect.trim() : '';
+    this.$contextualFeedback
+      .text(incorrectFeedback)
+      .toggleClass('h5p-scale-question-contextual-feedback-empty', !incorrectFeedback);
+    this.$correctContextualFeedback
+      .text(correctFeedback)
+      .toggleClass('h5p-scale-question-contextual-feedback-empty', !correctFeedback);
+  };
+
+  ScaleQuestion.prototype.updateAttemptFeedback = function (show) {
+    if (!this.$attemptFeedback) {
+      return;
+    }
+    var feedback = show ? this.getIntermediateIncorrectFeedback() : '';
+    this.$attemptFeedback
+      .text(feedback)
+      .toggleClass('h5p-scale-question-attempt-feedback-empty', !feedback);
+  };
+
+  ScaleQuestion.prototype.getIntermediateIncorrectFeedback = function () {
+    return this.getIncorrectFeedback();
+  };
+
+  ScaleQuestion.prototype.getTerminalIncorrectFeedback = function () {
+    return this.getTerminalScoreFeedback();
+  };
+
+  ScaleQuestion.prototype.getTerminalScoreFeedback = function () {
+    var feedback = replaceToken(this.params.l10n.scoreFeedback, '@score', this.getScore());
+    return replaceToken(feedback, '@total', MAX_SCORE);
+  };
+
+  ScaleQuestion.prototype.getCorrectResultFeedback = function () {
+    var feedback = this.getTerminalScoreFeedback();
+    var toleranceFeedback = this.getAcceptedToleranceFeedback();
+    if (!toleranceFeedback) {
+      return feedback;
+    }
+
+    return feedback + (/[.!?:;]$/.test(feedback) ? ' ' : '. ') + toleranceFeedback;
   };
 
   ScaleQuestion.prototype.checkAnswer = function () {
@@ -1060,18 +1093,18 @@ H5P.ScaleQuestion = (function ($, Question) {
     }
 
     this.updateView();
+    this.updateContextualFeedback(!isCorrect, isCorrect);
+    this.updateAttemptFeedback(!this.terminal);
     if (this.terminal) {
+      this.terminalFeedbackResizePending = true;
       this.setFeedback(
-        this.correct ? this.getCorrectFeedback() : this.params.l10n.terminalIncorrectFeedback,
+        this.correct ? this.getCorrectResultFeedback() : this.getTerminalIncorrectFeedback(),
         this.getScore(), MAX_SCORE, this.params.l10n.scoreBarLabel
       );
       this.emitTerminalAnswered();
     }
     else {
-      this.setFeedback(
-        this.getIntermediateIncorrectFeedback(),
-        0, MAX_SCORE, this.params.l10n.scoreBarLabel
-      );
+      this.requestResizeAfterLayout();
     }
     return this.terminal;
   };
@@ -1155,8 +1188,18 @@ H5P.ScaleQuestion = (function ($, Question) {
     if (this.validationErrors.length > 0) {
       return;
     }
+    var solutionWasVisible = this.solutionVisible;
     this.solutionVisible = true;
     this.updateView();
+    this.updateContextualFeedback(
+      this.selectedIndex !== null && !this.isCorrectIndex(this.selectedIndex),
+      this.selectedIndex !== null && !this.isCorrectIndex(this.selectedIndex) &&
+        (this.terminal || this.awaitingRetry)
+    );
+    this.updateAttemptFeedback(false);
+    if (!solutionWasVisible) {
+      this.requestResizeAfterLayout();
+    }
   };
 
   ScaleQuestion.prototype.retryTask = function (moveFocus) {
@@ -1172,16 +1215,17 @@ H5P.ScaleQuestion = (function ($, Question) {
     this.solutionVisible = false;
     this.lastCommittedIndex = null;
     this.lastCommitTime = 0;
-    if (this.removeFeedback) {
-      this.removeFeedback();
-    }
     this.updateView();
+    this.updateContextualFeedback(false, false);
+    this.updateAttemptFeedback(false);
+    this.requestResizeAfterLayout();
     if (moveFocus && this.$slider) {
       this.$slider.focus();
     }
   };
 
   ScaleQuestion.prototype.resetTask = function (moveFocus) {
+    var terminalFeedbackVisible = this.terminal;
     this.setInitialState();
     this.terminalEventEmitted = false;
     this.lastCommittedIndex = null;
@@ -1190,6 +1234,11 @@ H5P.ScaleQuestion = (function ($, Question) {
       this.removeFeedback();
     }
     this.updateView();
+    this.updateContextualFeedback(false, false);
+    this.updateAttemptFeedback(false);
+    if (!terminalFeedbackVisible) {
+      this.requestResizeAfterLayout();
+    }
     if (moveFocus && this.$slider) {
       this.$slider.focus();
     }

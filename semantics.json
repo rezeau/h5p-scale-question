@@ -204,6 +204,13 @@
     "optional": true
   },
   {
+    "name": "feedbackCorrect",
+    "type": "text",
+    "label": "Feedback for a correct answer",
+    "importance": "medium",
+    "optional": true
+  },
+  {
     "name": "maxAttempts",
     "type": "number",
     "label": "Maximum number of attempts",
@@ -277,10 +284,11 @@
       {"name": "tryAgain", "type": "text", "label": "Retry button label", "default": "Retry"},
       {"name": "showSolution", "type": "text", "label": "Show Solution button label", "default": "Show solution"},
       {"name": "correctAnswer", "type": "text", "label": "Revealed correct answer", "default": "Correct answer: @value"},
+      {"name": "scoreFeedback", "type": "text", "label": "Visible terminal score summary", "default": "You got @score of @total points"},
       {"name": "correctFeedback", "type": "text", "label": "Correct feedback", "default": "Correct."},
-      {"name": "incorrectFeedbackSingular", "type": "text", "label": "Intermediate incorrect feedback with one attempt remaining", "default": "Incorrect. @remaining attempt remaining."},
-      {"name": "incorrectFeedbackPlural", "type": "text", "label": "Intermediate incorrect feedback with multiple attempts remaining", "default": "Incorrect. @remaining attempts remaining."},
-      {"name": "terminalIncorrectFeedback", "type": "text", "label": "Terminal incorrect feedback", "default": "Incorrect. 0 attempts remaining."},
+      {"name": "incorrectFeedbackSingular", "type": "text", "label": "Intermediate attempt feedback with one attempt remaining", "default": "Incorrect. @remaining attempt remaining."},
+      {"name": "incorrectFeedbackPlural", "type": "text", "label": "Intermediate attempt feedback with multiple attempts remaining", "default": "Incorrect. @remaining attempts remaining."},
+      {"name": "terminalIncorrectFeedback", "type": "text", "label": "Terminal attempt feedback", "default": "0 attempts remaining."},
       {"name": "acceptedRange", "type": "text", "label": "Accepted interval solution text", "default": "Accepted interval: @lower to @upper. Slider shows accepted position @value."},
       {"name": "acceptedToleranceFeedback", "type": "text", "label": "Accepted tolerance feedback", "default": "Your answer is within the accepted tolerance of ±@tolerance."},
       {"name": "scoreBarLabel", "type": "text", "label": "Accessible score text", "default": "You got :num out of :total points"},
