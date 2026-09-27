@@ -388,8 +388,8 @@ function applyEditorDefaults(fields, params) {
 test('library identity and asset paths are consistent', () => {
   assert.equal(manifest.title, 'Scale Question');
   assert.equal(manifest.machineName, 'H5P.ScaleQuestion');
-  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 2, 2]);
-  assert.equal(packageManifest.version, '0.2.2');
+  assert.deepEqual([manifest.majorVersion, manifest.minorVersion, manifest.patchVersion], [0, 2, 3]);
+  assert.equal(packageManifest.version, '0.2.3');
   assert.equal(manifest.runnable, 1);
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedJs[0].path)));
   assert.ok(fs.existsSync(path.join(root, manifest.preloadedCss[0].path)));
@@ -2239,6 +2239,75 @@ test('numerical answers below and above compose directional and one-remaining fe
   });
 });
 
+test('contextual feedback decodes H5P plain-text entities exactly once and preserves raw characters', () => {
+  [
+    { authored: 'That&#039;s correct.', visible: "That's correct." },
+    { authored: '&quot;Exactly&quot;', visible: '"Exactly"' },
+    { authored: 'A &amp; B', visible: 'A & B' },
+    { authored: 'Use &lt; and &gt; here.', visible: 'Use < and > here.' },
+    { authored: 'Raw \'apostrophe\', "quote", & and <tag>.', visible: 'Raw \'apostrophe\', "quote", & and <tag>.' },
+    { authored: 'That&amp;#039;s one pass.', visible: 'That&#039;s one pass.' }
+  ].forEach(({ authored, visible }) => {
+    const { instance, calls } = createInstance(validParams({ feedbackCorrect: authored }));
+    attach(instance);
+    instance.selectPosition(2);
+    assert.equal(instance.checkAnswer(), true);
+    assertContextualFeedback(instance, { correct: visible });
+    assert.equal(calls.feedback.at(-1)[0], scoreSummary(1));
+    assert.equal(instance.getScore(), 1);
+    assert.equal(xAPIEvents(calls).length, 1);
+  });
+});
+
+test('encoded and raw contextual markup remains inert text without HTML insertion', () => {
+  [
+    { authored: '&lt;strong&gt;Explanation&lt;/strong&gt;', visible: '<strong>Explanation</strong>' },
+    { authored: '<strong>Explanation</strong>', visible: '<strong>Explanation</strong>' },
+    {
+      authored: '&lt;img src=x onerror=&quot;globalThis.entityHandlerRan=true&quot;&gt;',
+      visible: '<img src=x onerror="globalThis.entityHandlerRan=true">'
+    },
+    {
+      authored: '<img src=x onerror="globalThis.entityHandlerRan=true">',
+      visible: '<img src=x onerror="globalThis.entityHandlerRan=true">'
+    }
+  ].forEach(({ authored, visible }) => {
+    const { instance } = createInstance(validParams({ feedbackCorrect: authored }));
+    attach(instance);
+    instance.selectPosition(2);
+    instance.checkAnswer();
+    assertContextualFeedback(instance, { correct: visible });
+    assert.equal(instance.$correctContextualFeedback.html(), '');
+    assert.equal(instance.$correctContextualFeedback.children.length, 0);
+  });
+
+  const start = source.indexOf('ScaleQuestion.prototype.updateContextualFeedback');
+  const end = source.indexOf('ScaleQuestion.prototype.updateAttemptFeedback', start);
+  const contextualSource = source.slice(start, end);
+  assert.match(contextualSource, /\.text\(incorrectFeedback\)/);
+  assert.match(contextualSource, /\.text\(correctFeedback\)/);
+  assert.doesNotMatch(contextualSource, /\.html\(/);
+});
+
+test('intermediate and terminal directional feedback decodes entities below and above the answer', () => {
+  [
+    { selectedIndex: 1, field: 'feedbackBelowCorrect', authored: 'That&#039;s below.', visible: "That's below." },
+    { selectedIndex: 3, field: 'feedbackAboveCorrect', authored: '&quot;Above&quot; &amp; away.', visible: '"Above" & away.' }
+  ].forEach(({ selectedIndex, field, authored, visible }) => {
+    [2, 1].forEach((maxAttempts) => {
+      const { instance, calls } = createInstance(validParams({ maxAttempts, [field]: authored }));
+      attach(instance);
+      instance.selectPosition(selectedIndex);
+      assert.equal(instance.checkAnswer(), maxAttempts === 1);
+      assertContextualFeedback(instance, { incorrect: visible });
+      assert.equal(instance.attemptsUsed, 1);
+      assert.equal(instance.getScore(), 0);
+      assert.equal(xAPIEvents(calls).length, maxAttempts === 1 ? 1 : 0);
+      assert.equal(calls.feedback.length, maxAttempts === 1 ? 1 : 0);
+    });
+  });
+});
+
 test('custom-point answers below and above compose directional and one-remaining feedback in both orientations', () => {
   ['horizontal', 'vertical'].forEach((orientation) => {
     const feedback = {
@@ -3144,7 +3213,7 @@ test('correct second attempt is terminal and full Reset restores a fresh allowan
 });
 
 test('saved state awaiting Retry restores directional and remaining feedback, lock, and buttons', () => {
-  const params = validParams({ feedbackBelowCorrect: 'Move higher.' });
+  const params = validParams({ feedbackBelowCorrect: 'That&#039;s below; move higher.' });
   const original = createInstance(params);
   attach(original.instance);
   original.instance.selectPosition(1);
@@ -3163,7 +3232,7 @@ test('saved state awaiting Retry restores directional and remaining feedback, lo
   assert.equal(restored.calls.buttons['show-solution'].visible, false);
   assert.equal(restored.calls.feedback.length, 0);
   assertAttemptFeedback(restored.instance, attemptFeedback(1));
-  assertContextualFeedback(restored.instance, { incorrect: 'Move higher.' });
+  assertContextualFeedback(restored.instance, { incorrect: "That's below; move higher." });
   assert.equal(xAPIEvents(restored.calls).length, 0);
 
   restored.instance.retryTask();
@@ -3477,8 +3546,8 @@ test('exhausted attempts retain the submitted answer when revealing the solution
 test('saved Show Solution state restores correct feedback and normalizes an old moved cursor', () => {
   const params = validParams({
     maxAttempts: 1,
-    feedbackBelowCorrect: 'The submitted answer was too low.',
-    feedbackCorrect: 'This is why the revealed answer is correct.'
+    feedbackBelowCorrect: 'The submitted answer wasn&#039;t high enough.',
+    feedbackCorrect: 'That&#039;s why the revealed answer is correct.'
   });
   const original = createInstance(params);
   attach(original.instance);
@@ -3499,8 +3568,8 @@ test('saved Show Solution state restores correct feedback and normalizes an old 
   assert.equal(restored.instance.$slider.attributes['aria-valuetext'],
     'Selected value: 1. Correct answer: 2');
   assertContextualFeedback(restored.instance, {
-    incorrect: 'The submitted answer was too low.',
-    correct: 'This is why the revealed answer is correct.'
+    incorrect: "The submitted answer wasn't high enough.",
+    correct: "That's why the revealed answer is correct."
   });
   assert.equal(restored.calls.feedback.length, 0);
   assert.equal(xAPIEvents(restored.calls).length, 0);
@@ -3564,12 +3633,12 @@ test('Show Solution click preserves the terminal result UI and result state', ()
 });
 
 test('Show Solution displays incorrect then correct contextual feedback and removes attempts text', () => {
-  const incorrect = 'Move higher to reach the target.';
-  const correct = 'The correct position is explained here.';
+  const incorrect = "That's below & away from the target.";
+  const correct = 'The "correct" position is <here>.';
   const { instance, calls } = createInstance(validParams({
     maxAttempts: 1,
-    feedbackBelowCorrect: incorrect,
-    feedbackCorrect: correct
+    feedbackBelowCorrect: 'That&#039;s below &amp; away from the target.',
+    feedbackCorrect: 'The &quot;correct&quot; position is &lt;here&gt;.'
   }));
   attach(instance);
   instance.selectPosition(1);

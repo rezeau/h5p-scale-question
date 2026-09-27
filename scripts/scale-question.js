@@ -200,6 +200,22 @@ H5P.ScaleQuestion = (function ($, Question) {
     return String(template).split(token).join(value);
   };
 
+  var decodePlainTextEntities = function (value) {
+    var entities = {
+      '&#039;': '\'',
+      '&quot;': '"',
+      '&amp;': '&',
+      '&lt;': '<',
+      '&gt;': '>'
+    };
+
+    return typeof value === 'string' ?
+      value.replace(/&#039;|&quot;|&amp;|&lt;|&gt;/g, function (entity) {
+        return entities[entity];
+      }) :
+      value;
+  };
+
   var indexedMessage = function (template, index) {
     return replaceToken(template, '@index', index + 1);
   };
@@ -1029,9 +1045,10 @@ H5P.ScaleQuestion = (function ($, Question) {
       return;
     }
 
-    var incorrectFeedback = showIncorrect ? this.getDirectionalFeedback() : '';
+    var incorrectFeedback = showIncorrect ?
+      decodePlainTextEntities(this.getDirectionalFeedback()) : '';
     var correctFeedback = showCorrect && typeof this.params.feedbackCorrect === 'string' ?
-      this.params.feedbackCorrect.trim() : '';
+      decodePlainTextEntities(this.params.feedbackCorrect.trim()) : '';
     this.$contextualFeedback
       .text(incorrectFeedback)
       .toggleClass('h5p-scale-question-contextual-feedback-empty', !incorrectFeedback);

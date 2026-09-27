@@ -1,6 +1,6 @@
 # H5P.ScaleQuestion
 
-H5P.ScaleQuestion is an interactive, gradable H5P question type in which learners select a position on a scale. This repository contains version 0.2.2.
+H5P.ScaleQuestion is an interactive, gradable H5P question type in which learners select a position on a scale. This repository contains version 0.2.3.
 
 ## Question modes
 
@@ -38,7 +38,7 @@ With manual checking, the learner selects a position and presses **Check**. With
 
 The maximum score is 1. A correct answer is terminal. An incorrect answer is terminal when the configured attempt limit is reached or Retry is disabled. When Retry is enabled and attempts remain, an incorrect answer enters an intermediate retry state. Retry clears the selection and unlocks the scale without resetting the number of attempts already used.
 
-Authored below/above feedback remains visible for every incorrect submission, including the final attempt. Both scale modes use the scale itself, rather than a separate textual row, to communicate the selected value. Intermediate attempts display an incorrect message and the number of attempts remaining without a score bar; terminal answers use the standard H5P.Question score summary and score bar. Authors may also provide contextual feedback for a checked correct answer.
+Authored below/above feedback remains visible for every incorrect submission, including the final attempt. H5P-encoded plain-text characters in contextual feedback are displayed as their intended characters while the feedback remains text-only. Both scale modes use the scale itself, rather than a separate textual row, to communicate the selected value. Intermediate attempts display an incorrect message and the number of attempts remaining without a score bar; terminal answers use the standard H5P.Question score summary and score bar. Authors may also provide contextual feedback for a checked correct answer.
 
 Reset restores the initial unanswered state. When enabled, Show Solution is made available according to the terminal-incorrect result rules; revealing the solution does not alter the submitted answer, attempt count, or score. The scale indicates the solution visually without adding a separate correct-answer row. Authored correct feedback may accompany the revealed solution after the directional feedback. Authors should use directional feedback to explain the learner's incorrect choice and correct feedback to explain or add information about the visually revealed answer; correct feedback also appears after an actually correct submission.
 
@@ -58,7 +58,7 @@ Numerical configurations require:
 
 Custom-point configurations require 2–12 valid reference points and exactly one point marked correct. Point values are required and are treated as text; labels are optional.
 
-Invalid configurations display localized runtime configuration-error messages. Version 0.2.2 does not provide a custom editor validator.
+Invalid configurations display localized runtime configuration-error messages. Version 0.2.3 does not provide a custom editor validator.
 
 ## Accessibility and localization
 
@@ -71,7 +71,7 @@ English is the source language. A French translation is included in `language/fr
 Library metadata:
 
 - Machine name: `H5P.ScaleQuestion`
-- Version: `0.2.2`
+- Version: `0.2.3`
 - H5P core API: `1.28`
 - Runnable: yes
 - Embedding mode: `iframe`
@@ -102,7 +102,7 @@ From the local H5P development environment, create a validated library-only pack
 
 ```powershell
 cd C:\my_first_h5p_environment\libraries
-h5p utils pack H5P.ScaleQuestion-0.2 H5P.ScaleQuestion-0.2.2.h5p
+h5p utils pack H5P.ScaleQuestion-0.2 H5P.ScaleQuestion-0.2.3.h5p
 ```
 
 This non-recursive command does not bundle dependencies. The `.h5pignore` file excludes tests and other development-only files from the package.
